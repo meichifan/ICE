@@ -7,22 +7,56 @@
 //  用 ARView 的 .nonAR 模式跑纯 RealityKit 渲染：不用摄像头、不需要 AR 权限，
 //  兼容范围也比 RealityView 更宽（iOS 13+）。
 //
-//  另外内置一个"自动拖动"脚本（只在设置了 ICE_AUTODRAG=1 时生效），
-//  供 CI 在模拟器里截图验收交互效果，对正常使用没有任何影响。
+//  两个只在 CI 里开启的开关（环境变量），对正常使用没有任何影响：
+//   ICE_AUTODRAG=1  自动反复做一次拖动，方便截到"拖动中/惯性中"的画面
+//   ICE_DIAG=1      输出场景诊断信息（几何体位置、点击命中结果）
 //
 
 import SwiftUI
 import RealityKit
 import Combine
 
-struct IceSceneView: UIViewRepresentable {
+/// 诊断日志走 stderr（stdout 被管道缓冲会丢），CI 里用 simctl --console 抓取
+func iceLog(_ message: String) {
+    FileHandle.standardError.write(Data(("[ICE] " + message + "\n").utf8))
+}
 
-    func makeUIView(context: Context) -> IceARView {
-        IceARView(frame: .zero)
+struct IceSceneView: UIViewControllerRepresentable {
+
+    func makeUIViewController(context: Context) -> IceViewController {
+        IceViewController()
     }
 
-    func updateUIView(_ uiView: IceARView, context: Context) {
+    func updateUIViewController(_ viewController: IceViewController, context: Context) {
         // 场景是自足的，不需要根据 SwiftUI 状态更新
+    }
+}
+
+/// 用 UIViewController 承载，才能可靠地隐藏状态栏（SwiftUI 的 statusBarHidden 在这里不生效）
+final class IceViewController: UIViewController {
+
+    private let arView = IceARView(frame: .zero)
+
+    override var prefersStatusBarHidden: Bool { true }
+    override var prefersHomeIndicatorAutoHidden: Bool { true }
+
+    override func loadView() {
+        let container = UIView()
+        container.backgroundColor = UIColor(red: 0.055, green: 0.06, blue: 0.07, alpha: 1.0)
+        arView.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(arView)
+        NSLayoutConstraint.activate([
+            arView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            arView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            arView.topAnchor.constraint(equalTo: container.topAnchor),
+            arView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
+        view = container
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        setNeedsStatusBarAppearanceUpdate()
     }
 }
 
@@ -55,11 +89,17 @@ final class IceARView: ARView {
         }
 
         startScriptedDragIfNeeded()
+        scheduleDiagnostics()
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        iceLog("layoutSubviews bounds=\(bounds)")
     }
 
     // MARK: - 触摸转发
@@ -81,6 +121,25 @@ final class IceARView: ARView {
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         interaction?.cancel()
+    }
+
+    // MARK: - CI 诊断
+
+    private func scheduleDiagnostics() {
+        guard ProcessInfo.processInfo.environment["ICE_DIAG"] == "1" else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
+            guard let self else { return }
+            let center = CGPoint(x: self.bounds.midX, y: self.bounds.midY)
+            let hits = self.hitTest(center, query: .all, mask: .all)
+            iceLog("diag bounds=\(self.bounds)")
+            iceLog("diag hits at center count=\(hits.count) names=\(hits.map { $0.entity.name })")
+            if let cube = self.iceScene.cube {
+                iceLog("diag cube pos=\(cube.position(relativeTo: nil)) scale=\(cube.scale)")
+                iceLog("diag cube visualBounds=\(cube.visualBounds(relativeTo: nil))")
+            }
+            iceLog("diag camera=\(self.iceScene.debugCamera())")
+            iceLog("diag anchors=\(self.scene.anchors.count)")
+        }
     }
 
     // MARK: - CI 验收脚本

@@ -73,21 +73,39 @@ jobs:
           set -e
           APP=build-sim/Build/Products/Debug-iphonesimulator/ICE.app
           xcrun simctl install "$SIM_UDID" "$APP"
-          # ICE_AUTODRAG=1 让 App 自己反复做一次拖动，方便截到"拖动中/惯性中"的画面
-          SIMCTL_CHILD_ICE_AUTODRAG=1 xcrun simctl launch "$SIM_UDID" com.ice.app
-          sleep 3
-          xcrun simctl io "$SIM_UDID" screenshot shot-1.png
-          sleep 1
-          xcrun simctl io "$SIM_UDID" screenshot shot-2.png
-          sleep 2
-          xcrun simctl io "$SIM_UDID" screenshot shot-3.png
-          sleep 2
-          xcrun simctl io "$SIM_UDID" screenshot shot-4.png
-          ls -la *.png
+
+          run_mode () {
+            NAME="$1"
+            EXTRA="$2"
+            xcrun simctl terminate "$SIM_UDID" com.ice.app 2>/dev/null || true
+            sleep 1
+            # 后台挂着 console 抓 App 的 stderr 日志
+            ( env $EXTRA SIMCTL_CHILD_ICE_AUTODRAG=1 SIMCTL_CHILD_ICE_DIAG=1 \
+                timeout 24 xcrun simctl launch --console "$SIM_UDID" com.ice.app \
+                > "console-$NAME.log" 2>&1 ) || true &
+            sleep 5
+            xcrun simctl io "$SIM_UDID" screenshot "$NAME-1.png" || true
+            sleep 1
+            xcrun simctl io "$SIM_UDID" screenshot "$NAME-2.png" || true
+            sleep 2
+            xcrun simctl io "$SIM_UDID" screenshot "$NAME-3.png" || true
+            sleep 2
+            xcrun simctl io "$SIM_UDID" screenshot "$NAME-4.png" || true
+            sleep 16
+          }
+
+          run_mode normal ""
+          run_mode solid "SIMCTL_CHILD_ICE_SOLID=1"
+
+          ls -la *.png *.log || true
+          echo "===== console normal ====="; cat console-normal.log || true
+          echo "===== console solid ====="; cat console-solid.log || true
 
       - name: Upload screenshots
         uses: actions/upload-artifact@v4
         with:
           name: ICE-screenshots
-          path: shot-*.png
+          path: |
+            *.png
+            *.log
           retention-days: 14

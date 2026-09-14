@@ -145,9 +145,18 @@ final class IceCubeNode {
         m.clearcoat = .init(floatLiteral: 1.0)
         m.clearcoatRoughness = .init(floatLiteral: 0.03)
 
+        // 诊断模式：实心不透明，用来判断"看不见"是材质问题还是几何/相机问题
+        if ProcessInfo.processInfo.environment["ICE_SOLID"] == "1" {
+            m.blending = .transparent(opacity: .init(floatLiteral: 0.95))
+            m.roughness = .init(floatLiteral: 0.2)
+            return m
+        }
+
         // 清浊 / 光滑不均
         let opacityMap = IceTextures.opacityImage().flatMap { IceTextures.texture(from: $0) }
         let roughnessMap = IceTextures.roughnessImage().flatMap { IceTextures.texture(from: $0) }
+
+        iceLog("opacity texture: \(opacityMap != nil), roughness texture: \(roughnessMap != nil)")
 
         if let opacityMap {
             m.blending = .transparent(opacity: .init(texture: MaterialParameters.Texture(opacityMap)))

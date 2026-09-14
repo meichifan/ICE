@@ -30,6 +30,7 @@ final class IceScene {
 
     private(set) var cube: ModelEntity!
     private(set) var mirror: ModelEntity!
+    private var camera = PerspectiveCamera()
 
     func build(in view: ARView) {
         // 背景：接近黑，但不是纯黑
@@ -45,7 +46,6 @@ final class IceScene {
         view.scene.addAnchor(root)
 
         // 相机：带一点俯角的产品镜头，长焦一点，透视不夸张
-        let camera = PerspectiveCamera()
         camera.camera.fieldOfViewInDegrees = 34
         camera.camera.near = 0.01
         camera.camera.far = 20
@@ -91,5 +91,14 @@ final class IceScene {
         mirror.position = [0, -IceScene.cubeRestY, 0]
         root.addChild(mirror)
         self.mirror = mirror
+
+        iceLog("scene built: anchors=\(view.scene.anchors.count) rootChildren=\(root.children.count) envLighting=\(view.environment.lighting.resource != nil)")
+        iceLog("cube pos=\(cube.position(relativeTo: nil)) visualBounds=\(cube.visualBounds(relativeTo: nil))")
+        iceLog("cube material count=\(cube.model?.materials.count ?? -1)")
+    }
+
+    /// CI 诊断用
+    func debugCamera() -> String {
+        "pos=\(camera.position(relativeTo: nil)) orient=\(camera.orientation(relativeTo: nil))"
     }
 }
