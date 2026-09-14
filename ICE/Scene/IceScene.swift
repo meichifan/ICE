@@ -47,13 +47,16 @@ final class IceScene {
         root.addChild(camera)
 
         // 环境光照：给冰块的表面提供环境反射（"真冰"和"塑料块"的分水岭）。
-        // 注意：打包进来的 .skybox 文件夹要用带扩展名的名字加载。
-        if let resource = try? EnvironmentResource.load(named: "iceEnv.skybox", in: nil) {
+        // Xcode 15.4 要通过异步初始化器加载 skybox 内的 env.png。
+        Task { @MainActor [weak view] in
+            guard let view,
+                  let resource = try? await EnvironmentResource(named: "env", in: nil) else {
+                iceLog("IBL load failed")
+                return
+            }
             view.environment.lighting.resource = resource
             view.environment.lighting.intensityExponent = 0.0
             iceLog("IBL loaded")
-        } else {
-            iceLog("IBL load failed")
         }
         // 主光：左上前方，冷白带蓝（冷窗光）
         let key = DirectionalLight()

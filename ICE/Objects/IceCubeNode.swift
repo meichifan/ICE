@@ -27,19 +27,29 @@ import UIKit
 
 enum IceTextures {
 
-    /// 透明度贴图：黑=透明、白=不透明。
-    /// 关键：靠边缘更透、中心更实（体积感的第一来源），再叠加内部霜斑。
+    private struct SeededRandom {
+        var state: UInt32 = 0x1CE5EED
+        mutating func next() -> CGFloat {
+            state = 1664525 &* state &+ 1013904223
+            return CGFloat(state) / CGFloat(UInt32.max)
+        }
+        mutating func range(_ lower: CGFloat, _ upper: CGFloat) -> CGFloat {
+            lower + (upper - lower) * next()
+        }
+    }
+
+    /// 透明度贴图：边缘更有厚度，中心只保留低对比的冰体密度。
     static func opacityImage(side: CGFloat = 512) -> CGImage? {
         let size = CGSize(width: side, height: side)
         let renderer = UIGraphicsImageRenderer(size: size)
         let image = renderer.image { ctx in
             let cg = ctx.cgContext
-            // 径向梯度：边上较暗（更透），中心较亮（更实）
+            // 低对比体积密度：避免整块统一 alpha，也避免玻璃式透明渐变。
             let center = CGPoint(x: side / 2, y: side / 2)
             let colors = [
-                UIColor(white: 0.92, alpha: 1).cgColor,   // 中心：较实
-                UIColor(white: 0.72, alpha: 1).cgColor,   // 中环
-                UIColor(white: 0.32, alpha: 1).cgColor    // 边缘：较透
+                UIColor(white: 0.25, alpha: 1).cgColor,
+                UIColor(white: 0.30, alpha: 1).cgColor,
+                UIColor(white: 0.48, alpha: 1).cgColor
             ] as CFArray
             if let grad = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
                                      colors: colors, locations: [0, 0.55, 1]) {
@@ -48,13 +58,23 @@ enum IceTextures {
                                       endCenter: center, endRadius: side * 0.72,
                                       options: [.drawsAfterEndLocation])
             }
-            // 内部霜斑：中性的浊区
-            for _ in 0..<45 {
+            var random = SeededRandom()
+            // 局部浑浊：只改变密度，不画白色光斑。
+            for _ in 0..<12 {
                 drawBlob(cg,
-                         center: CGPoint(x: .random(in: side*0.2...side*0.8),
-                                         y: .random(in: side*0.2...side*0.8)),
-                         radius: .random(in: side*0.05...side*0.22),
-                         alpha: .random(in: 0.10...0.28))
+                         center: CGPoint(x: random.range(side * 0.18, side * 0.82),
+                                         y: random.range(side * 0.16, side * 0.84)),
+                         radius: random.range(side * 0.035, side * 0.11),
+                         alpha: random.range(0.035, 0.09))
+            }
+            // 微气泡：很小、低透明、不同深度的密度变化，不做成 UI 圆点。
+            for _ in 0..<28 {
+                let r = random.range(side * 0.004, side * 0.012)
+                drawBlob(cg,
+                         center: CGPoint(x: random.range(side * 0.12, side * 0.88),
+                                         y: random.range(side * 0.10, side * 0.90)),
+                         radius: r,
+                         alpha: random.range(0.035, 0.085))
             }
         }
         return image.cgImage
@@ -67,63 +87,45 @@ enum IceTextures {
         let renderer = UIGraphicsImageRenderer(size: size)
         let image = renderer.image { ctx in
             let cg = ctx.cgContext
-            cg.setFillColor(UIColor(white: 0.10, alpha: 1).cgColor)  // 整体湿润光滑
+            cg.setFillColor(UIColor(white: 0.30, alpha: 1).cgColor)  // 冰面，不是镜面玻璃
             cg.fill(CGRect(origin: .zero, size: size))
-            // 少量霜斑让高光有点碎
-            for _ in 0..<30 {
+            var random = SeededRandom()
+            // 少量冰层让反射出现不规则断续，而不是一整块高光。
+            for _ in 0..<10 {
                 drawBlob(cg,
-                         center: CGPoint(x: .random(in: 0...side),
-                                         y: .random(in: 0...side)),
-                         radius: .random(in: side*0.04...side*0.16),
-                         alpha: .random(in: 0.08...0.22))
+                         center: CGPoint(x: random.range(side * 0.08, side * 0.92),
+                                         y: random.range(side * 0.08, side * 0.92)),
+                         radius: random.range(side * 0.025, side * 0.10),
+                         alpha: random.range(0.06, 0.14))
             }
-            // 裂隙：细线略糙
+            // 极少量微裂隙：只在近看时打碎高光。
             cg.setLineCap(.round)
-            for _ in 0..<16 {
-                let x0 = CGFloat.random(in: 0...side), y0 = CGFloat.random(in: 0...side)
-                let len = CGFloat.random(in: side*0.05...side*0.20)
-                let a = CGFloat.random(in: 0...(2 * .pi))
+            for _ in 0..<7 {
+                let x0 = random.range(side * 0.10, side * 0.90)
+                let y0 = random.range(side * 0.10, side * 0.90)
+                let len = random.range(side * 0.025, side * 0.09)
+                let a = random.range(0, 2 * .pi)
                 let pth = UIBezierPath()
                 pth.move(to: CGPoint(x: x0, y: y0))
-                pth.addLine(to: CGPoint(x: x0 + cos(a)*len, y: y0 + sin(a)*len))
-                pth.lineWidth = CGFloat.random(in: 0.5...1.4)
-                UIColor(white: 1.0, alpha: CGFloat.random(in: 0.10...0.25)).setStroke()
+                pth.addLine(to: CGPoint(x: x0 + cos(a) * len, y: y0 + sin(a) * len))
+                pth.lineWidth = random.range(0.45, 1.0)
+                UIColor(white: 1.0, alpha: random.range(0.08, 0.16)).setStroke()
                 pth.stroke()
             }
         }
         return image.cgImage
     }
 
-    /// 颜色贴图：冰的淡蓝冷色，中心霜区偏白。
+    /// 颜色贴图：接近透明冷白；不把冰染成蓝色，也不叠加大面积白斑。
     static func colorImage(side: CGFloat = 512) -> CGImage? {
         let size = CGSize(width: side, height: side)
         let renderer = UIGraphicsImageRenderer(size: size)
         let image = renderer.image { ctx in
             let cg = ctx.cgContext
-            // 基底：淡蓝灰（冰的颜色）
-            cg.setFillColor(UIColor(red: 0.72, green: 0.82, blue: 0.94, alpha: 1).cgColor)
+            cg.setFillColor(UIColor(red: 0.78, green: 0.84, blue: 0.90, alpha: 1).cgColor)
             cg.fill(CGRect(origin: .zero, size: size))
-            // 中心霜区偏白
-            drawTintedBlob(cg, center: CGPoint(x: side*0.5, y: side*0.5),
-                           radius: side*0.34,
-                           color: UIColor(red: 0.95, green: 0.97, blue: 1.0, alpha: 1))
-            drawTintedBlob(cg, center: CGPoint(x: side*0.42, y: side*0.44),
-                           radius: side*0.16,
-                           color: UIColor(red: 0.90, green: 0.94, blue: 1.0, alpha: 1))
         }
         return image.cgImage
-    }
-
-    private static func drawTintedBlob(_ cg: CGContext, center: CGPoint,
-                                       radius: CGFloat, color: UIColor) {
-        let colors = [
-            color.cgColor,
-            color.withAlphaComponent(0).cgColor
-        ] as CFArray
-        guard let grad = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                                    colors: colors, locations: [0, 1]) else { return }
-        cg.drawRadialGradient(grad, startCenter: center, startRadius: 0,
-                              endCenter: center, endRadius: radius, options: [])
     }
 
     /// 灰度软斑（用于不透明度的内部霜区与粗糙度的霜面）
@@ -140,7 +142,7 @@ enum IceTextures {
                               endCenter: center, endRadius: radius, options: [])
     }
 
-    /// 桌面湿痕：一圈很淡的亮环（冰放在黑玻璃桌面上，接触处的水膜反光）
+    /// 桌面接触阴影：暗而柔，不使用白色椭圆或人工发光。
     static func wetRingImage(side: CGFloat = 256) -> CGImage? {
         let size = CGSize(width: side, height: side)
         let renderer = UIGraphicsImageRenderer(size: size)
@@ -148,12 +150,12 @@ enum IceTextures {
             let cg = ctx.cgContext
             let center = CGPoint(x: side / 2, y: side / 2)
             let colors = [
-                UIColor(white: 1.0, alpha: 0.0).cgColor,
-                UIColor(white: 1.0, alpha: 0.30).cgColor,
-                UIColor(white: 1.0, alpha: 0.0).cgColor
+                UIColor(white: 0.0, alpha: 0.20).cgColor,
+                UIColor(white: 0.0, alpha: 0.10).cgColor,
+                UIColor(white: 0.0, alpha: 0.0).cgColor
             ] as CFArray
             guard let grad = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                                        colors: colors, locations: [0, 0.74, 1]) else { return }
+                                        colors: colors, locations: [0, 0.62, 1]) else { return }
             cg.drawRadialGradient(grad,
                                   startCenter: center, startRadius: 0,
                                   endCenter: center, endRadius: side / 2,
@@ -224,10 +226,15 @@ enum IceMesh {
         // 位移只在面内、不沿法线方向，这样每个面的基准点保持在同一平面上，
         // 位移幅度均匀，不会出现棱边开缝。
         func displace(_ p: SIMD3<Float>) -> SIMD3<Float> {
-            // 大尺度起伏 + 小尺度碎面，都是"贴着表面"的起伏
-            let big = (noise(p * 8.0) - 0.5) * 0.009
-            let small = (noise(p * 34.0 + SIMD3(11, 5, 7)) - 0.5) * 0.0032
-            return p + big + small
+            // 非常轻的弯曲与崩边：仍然是冰块，不是石头或几何方盒。
+            let broad = (noise(p * 7.0 + SIMD3(3, 9, 2)) - 0.5) * 0.0032
+            let fine = (noise(p * 28.0 + SIMD3(11, 5, 7)) - 0.5) * 0.0012
+            var q = p
+            q.x += broad * (1 - abs(p.x / half.x) * 0.35)
+            q.z += fine * (1 - abs(p.z / half.z) * 0.35)
+            // 顶部和底部稍微不平，四角扰动很小且彼此不同。
+            q.y += (abs(p.y) > half.y * 0.98 ? broad * 0.55 : 0)
+            return q
         }
 
         // 预计算：为每个面内的每个顶点，先算好"体积扰动"后的基础位置。
@@ -303,7 +310,7 @@ enum IceMesh {
 
 final class IceCubeNode {
 
-    static let size: SIMD3<Float> = [0.09, 0.09, 0.09]
+    static let size: SIMD3<Float> = [0.073, 0.073, 0.073]
 
     /// 三张职责各异的贴图（颜色 / 透明度 / 粗糙度）。
     /// 都用固定随机种子生成，保证每次启动一致，也便于在 CI 里比对画面。
@@ -333,12 +340,11 @@ final class IceCubeNode {
         return entity
     }
 
-    /// 桌面湿痕：接触处一圈很淡的亮环。
-    /// 尺寸只比冰块略大一点点，读起来是"底板上的水膜边缘"。
+    /// 桌面接触阴影：只负责让冰块贴地，不参与冰体高光。
     static func makeContactRing() -> ModelEntity {
         var material = PhysicallyBasedMaterial()
-        material.baseColor.tint = UIColor(red: 0.55, green: 0.62, blue: 0.74, alpha: 1.0)
-        material.roughness = .init(floatLiteral: 0.40)
+        material.baseColor.tint = UIColor(white: 0.02, alpha: 1.0)
+        material.roughness = .init(floatLiteral: 0.92)
         material.metallic = .init(floatLiteral: 0.0)
         if let image = IceTextures.wetRingImage(), let resource = IceTextures.texture(from: image) {
             material.blending = .transparent(opacity: .init(texture: MaterialParameters.Texture(resource)))
@@ -347,7 +353,7 @@ final class IceCubeNode {
         }
 
         let entity = ModelEntity(
-            mesh: .generatePlane(width: size.x * 1.05, depth: size.z * 1.05),
+            mesh: .generatePlane(width: size.x * 0.92, depth: size.z * 0.92),
             materials: [material]
         )
         entity.name = IceScene.contactRingName
@@ -359,15 +365,14 @@ final class IceCubeNode {
     static func iceMaterial() -> PhysicallyBasedMaterial {
         var m = PhysicallyBasedMaterial()
 
-        // 冰本体几乎不漫反射：亮度全部来自环境反射和高光。
-        // 底色往蓝灰方向偏，符合"冷"的色温（参考图方向）。
-        m.baseColor.tint = UIColor(red: 0.16, green: 0.19, blue: 0.24, alpha: 1.0)
+        // 冰不自发光：亮度来自环境反射，底色只保留冷白灰。
+        m.baseColor.tint = UIColor(red: 0.82, green: 0.87, blue: 0.92, alpha: 1.0)
         m.metallic = .init(floatLiteral: 0.0)
         m.specular = .init(floatLiteral: 1.0)
 
-        // 表面水光：镜面反射
-        m.clearcoat = .init(floatLiteral: 1.0)
-        m.clearcoatRoughness = .init(floatLiteral: 0.02)
+        // 很轻的水膜，不做玻璃般的锐利镜面。
+        m.clearcoat = .init(floatLiteral: 0.18)
+        m.clearcoatRoughness = .init(floatLiteral: 0.16)
 
         // 诊断模式：实心不透明，用来判断"看不见"是材质问题还是几何/相机问题
         if ProcessInfo.processInfo.environment["ICE_SOLID"] == "1" {
@@ -377,12 +382,12 @@ final class IceCubeNode {
         }
 
         if let colorTex = colorTexture, let opacityTex = opacityTexture, let roughTex = roughnessTexture {
-            m.baseColor = .init(texture: MaterialParameters.Texture(colorTex))          // 淡蓝冷色 + 中心偏白
-            m.blending = .transparent(opacity: .init(texture: MaterialParameters.Texture(opacityTex)))  // 边缘透、中心实
-            m.roughness = .init(texture: MaterialParameters.Texture(roughTex))           // 湿润光滑、霜区略糙
+            m.baseColor = .init(texture: MaterialParameters.Texture(colorTex))
+            m.blending = .transparent(opacity: .init(texture: MaterialParameters.Texture(opacityTex)))
+            m.roughness = .init(texture: MaterialParameters.Texture(roughTex))
         } else {
-            m.blending = .transparent(opacity: .init(floatLiteral: 0.55))
-            m.roughness = .init(floatLiteral: 0.10)
+            m.blending = .transparent(opacity: .init(floatLiteral: 0.34))
+            m.roughness = .init(floatLiteral: 0.34)
         }
 
         return m
