@@ -37,7 +37,7 @@ enum IceTextures {
             let rect = CGRect(origin: .zero, size: size)
 
             // 底部：干净的冰（暗、透）
-            cg.setFillColor(UIColor(white: 0.05, alpha: 1).cgColor)
+            cg.setFillColor(UIColor(white: 0.08, alpha: 1).cgColor)
             cg.fill(rect)
 
             // 中间一团大的霜核：真实冰块最常见的形态
@@ -109,11 +109,11 @@ enum IceTextures {
             let center = CGPoint(x: side / 2, y: side / 2)
             let colors = [
                 UIColor(white: 1.0, alpha: 0.0).cgColor,
-                UIColor(white: 1.0, alpha: 0.55).cgColor,
+                UIColor(white: 1.0, alpha: 0.30).cgColor,
                 UIColor(white: 1.0, alpha: 0.0).cgColor
             ] as CFArray
             guard let grad = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                                        colors: colors, locations: [0, 0.72, 1]) else { return }
+                                        colors: colors, locations: [0, 0.74, 1]) else { return }
             cg.drawRadialGradient(grad,
                                   startCenter: center, startRadius: 0,
                                   endCenter: center, endRadius: side / 2,
@@ -211,7 +211,7 @@ enum IceMesh {
                         noise(p * 42 + SIMD3(0, 1, 0)) - 0.5,
                         noise(p * 42 + SIMD3(0, 0, 1)) - 0.5
                     )
-                    normal = simd_normalize(normal + grad * 0.70)
+                    normal = simd_normalize(normal + grad * 1.0)
 
                     positions.append(p)
                     normals.append(normal)
@@ -273,17 +273,17 @@ final class IceCubeNode {
     /// 桌面湿痕：接触处一圈很淡的亮环
     static func makeContactRing() -> ModelEntity {
         var material = PhysicallyBasedMaterial()
-        material.baseColor.tint = UIColor(red: 0.82, green: 0.90, blue: 1.0, alpha: 1.0)
-        material.roughness = .init(floatLiteral: 0.12)
+        material.baseColor.tint = UIColor(red: 0.60, green: 0.68, blue: 0.80, alpha: 1.0)
+        material.roughness = .init(floatLiteral: 0.35)
         material.metallic = .init(floatLiteral: 0.0)
         if let image = IceTextures.wetRingImage(), let resource = IceTextures.texture(from: image) {
             material.blending = .transparent(opacity: .init(texture: MaterialParameters.Texture(resource)))
         } else {
-            material.blending = .transparent(opacity: .init(floatLiteral: 0.25))
+            material.blending = .transparent(opacity: .init(floatLiteral: 0.18))
         }
 
         let entity = ModelEntity(
-            mesh: .generatePlane(width: size.x * 1.35, depth: size.z * 1.35),
+            mesh: .generatePlane(width: size.x * 1.22, depth: size.z * 1.22),
             materials: [material]
         )
         entity.name = IceScene.contactRingName
