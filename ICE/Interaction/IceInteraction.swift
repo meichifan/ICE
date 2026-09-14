@@ -2,177 +2,239 @@
 //  IceInteraction.swift
 //  ICE
 //
-//  第一阶段交互逻辑：
-//  - 点击：轻微缩放回弹 + 轻微震动位移 + UIImpactFeedback
-//  - 拖动：冰块跟随手指，松手后带惯性滑行并逐渐减速
-//  - 轻微旋转：拖动时给一点随机的缓慢旋转，像冰块在玻璃上蹭着转
+//  第一阶段交互（3D 版）：
+//   1. 点击：轻微下压缩放 + 极小的位置抖动 + 触觉反馈
+//   2. 拖动：手指位置通过拖拽平面精确映射到桌面，冰块跟随（带一点迟滞）
+//   3. 松手：按拖动速度产生惯性，逐渐减速，边缘软停止
+//   4. 轻微旋转：随水平速度绕 Y 轴缓慢转动
 //
-//  不用真实刚体物理，全部是手动数值积分，优先手感稳定。
+//  不用物理引擎，全部手动数值积分——手感和参数完全可控。
 //
 
-import SpriteKit
+import RealityKit
 import UIKit
+import simd
 
 final class IceInteraction {
 
-    private weak var ice: IceCubeNode?
+    private weak var view: IceARView?
+    private weak var scene: IceScene?
 
-    // 触觉反馈
-    private let impactLight = UIImpactFeedbackGenerator(style: .light)
+    private let impact = UIImpactFeedbackGenerator(style: .light)
 
-    // 拖动状态
+    // 拖拽状态
     private var isDragging = false
-    private var dragOffset: CGPoint = .zero
-
-    // 惯性（点/秒）
-    private var velocity: CGPoint = .zero
-    // 最近几帧的触摸速度采样，用于松手时估算惯性
-    private var lastTouchPosition: CGPoint = .zero
+    private var touchStartPoint = CGPoint.zero
+    private var touchStartTime: TimeInterval = 0
+    private var movedDistance: CGFloat = 0
     private var lastTouchTime: TimeInterval = 0
+    private var grabOffset = SIMD2<Float>.zero   // 抓取点与冰块中心的偏移（桌面平面）
 
-    // 旋转（弧度/秒）
-    private var angularVelocity: CGFloat = 0
+    // 运动状态
+    private var position = SIMD2<Float>.zero     // 桌面平面坐标 (x, z)
+    private var velocity = SIMD2<Float>.zero     // m/s
+    private var yaw: Float = 0
+    private var yawRate: Float = 0
 
-    // 阻尼：速度每秒衰减到的比例（越小停得越快）
-    private let linearDampingPerSecond: CGFloat = 0.90
-    private let angularDampingPerSecond: CGFloat = 0.92
+    // 视觉反馈（弹簧）
+    private var scale: Float = 1
+    private var scaleTarget: Float = 1
+    private var scaleVelocity: Float = 0
+    private var shake = SIMD2<Float>.zero
+    private var shakeVelocity = SIMD2<Float>.zero
 
-    init(ice: IceCubeNode) {
-        self.ice = ice
-        impactLight.prepare()
+    // 手感参数
+    private let followFactor: Float = 0.55       // 拖动跟随迟滞（越大越跟手）
+    private let maxSpeed: Float = 3.0            // m/s
+    private let stopSpeed: Float = 0.006
+    private let dampingPerSecond: Float = 0.10   // 惯性每秒剩余比例
+    private let rotationPerSpeed: Float = 0.55   // 速度 -> 角速度
+    private let maxYawRate: Float = 1.0          // rad/s
+    private let tapMaxDistance: CGFloat = 7
+    private let tapMaxDuration: TimeInterval = 0.3
+
+    init(view: IceARView, scene: IceScene) {
+        self.view = view
+        self.scene = scene
+        self.position = SIMD2<Float>(scene.cube.position.x, scene.cube.position.z)
+        impact.prepare()
     }
 
-    // MARK: - 触摸事件（由 IceScene 转发）
+    // MARK: - 触摸
 
-    func touchBegan(at point: CGPoint, time: TimeInterval, in scene: SKScene) -> Bool {
-        guard let ice = ice else { return false }
+    func touchesBegan(_ touches: Set<UITouch>, in view: IceARView) {
+        guard let touch = touches.first else { return }
+        let point = touch.location(in: view)
 
-        // 触摸点是场景坐标，先转成冰块自己的坐标系再判断命中
-        let local = ice.convert(point, from: scene)
-        let hitArea = ice.bodySprite.frame.insetBy(dx: -14, dy: -14)
-        guard hitArea.contains(local) else { return false }
+        touchStartPoint = point
+        touchStartTime = touch.timestamp
+        movedDistance = 0
 
-        // 停止所有进行中的动画
-        ice.removeAllActions()
-        velocity = .zero
-        angularVelocity = 0
+        // 必须按在冰上
+        guard isTouchingIce(point, in: view),
+              let world = worldPointOnTable(point, in: view) else { return }
 
-        // 判断是拖动开始（按住即视为可拖）
         isDragging = true
-        dragOffset = CGPoint(x: ice.position.x - point.x,
-                             y: ice.position.y - point.y)
-        lastTouchPosition = point
-        lastTouchTime = time
+        velocity = .zero
+        yawRate = 0
+        grabOffset = SIMD2<Float>(position.x - world.x, position.y - world.z)
+        lastTouchTime = touch.timestamp
 
-        // 点击反馈：轻微下压
-        let press = SKAction.scale(to: 0.96, duration: 0.09)
-        press.timingMode = .easeOut
-        ice.run(press)
-        impactLight.impactOccurred()
-
-        return true
+        // 按下：轻微下压
+        scaleTarget = 0.95
+        impact.impactOccurred()
     }
 
-    func touchMoved(to point: CGPoint, time: TimeInterval) {
-        guard isDragging, let ice = ice else { return }
+    func touchesMoved(_ touches: Set<UITouch>, in view: IceARView) {
+        guard isDragging, let touch = touches.first else { return }
+        let point = touch.location(in: view)
+        movedDistance += hypot(point.x - touchStartPoint.x, point.y - touchStartPoint.y)
 
-        // 采样触摸速度
-        let dt = max(time - lastTouchTime, 1.0 / 240)
-        let sampledVelocity = CGPoint(x: (point.x - lastTouchPosition.x) / dt,
-                                      y: (point.y - lastTouchPosition.y) / dt)
-        velocity = sampledVelocity
-        lastTouchPosition = point
-        lastTouchTime = time
+        guard let world = worldPointOnTable(point, in: view) else { return }
 
-        // 冰块跟随手指（保留按下时的偏移）
-        let target = CGPoint(x: point.x + dragOffset.x,
-                             y: point.y + dragOffset.y)
-        // 轻微平滑，避免一帧跳变
-        let smoothed = CGPoint(x: ice.position.x + (target.x - ice.position.x) * 0.6,
-                               y: ice.position.y + (target.y - ice.position.y) * 0.6)
-        ice.position = clampedToScene(smoothed)
+        let dt = Float(max(touch.timestamp - lastTouchTime, 1.0 / 240.0))
+        lastTouchTime = touch.timestamp
 
-        // 拖动时给一个与水平速度相关的小角速度
-        angularVelocity = (sampledVelocity.x / 1400) * .pi / 6
-        angularVelocity = max(min(angularVelocity, 0.35), -0.35)
+        let target = SIMD2<Float>(world.x + grabOffset.x, world.z + grabOffset.y)
+        var next = position + (target - position) * followFactor
+        next = clampToTable(next)
+
+        // 用实际位移计算速度，松手后的惯性和手感一致
+        velocity = (next - position) / dt
+        let speed = simd_length(velocity)
+        if speed > maxSpeed { velocity *= maxSpeed / speed }
+
+        position = next
+
+        // 随水平速度轻微旋转
+        yawRate = max(min(velocity.x * rotationPerSpeed, maxYawRate), -maxYawRate)
     }
 
-    func touchEnded() {
-        guard isDragging, let ice = ice else { return }
+    func touchesEnded(_ touches: Set<UITouch>, in view: IceARView) {
+        guard isDragging, let touch = touches.first else { return }
         isDragging = false
 
-        // 回弹：先过冲到 1.02 再回到 1.0，模拟弹簧手感
-        let overshoot = SKAction.scale(to: 1.02, duration: 0.12)
-        overshoot.timingMode = .easeOut
-        let settle = SKAction.scale(to: 1.0, duration: 0.22)
-        settle.timingMode = .easeInEaseOut
-        ice.run(.sequence([overshoot, settle]))
+        let duration = touch.timestamp - touchStartTime
+        let isTap = movedDistance < tapMaxDistance && duration < tapMaxDuration
 
-        // 轻微视觉震动（两个小位移）
-        let jiggle = SKAction.sequence([
-            .moveBy(x: 1.5, y: -1, duration: 0.04),
-            .moveBy(x: -1.5, y: 1, duration: 0.05)
-        ])
-        ice.run(jiggle)
+        let speed = simd_length(velocity)
+        if speed > maxSpeed { velocity *= maxSpeed / speed }
 
-        // 限制最大惯性，防止甩飞
-        let maxSpeed: CGFloat = 1400
-        let speed = hypot(velocity.x, velocity.y)
-        if speed > maxSpeed {
-            let k = maxSpeed / speed
-            velocity = CGPoint(x: velocity.x * k, y: velocity.y * k)
+        if isTap {
+            // 点击：回弹（过冲一点）+ 轻微震动 + 触觉
+            velocity = .zero
+            yawRate = 0
+            scaleTarget = 1.0
+            scaleVelocity = 1.5
+            let direction = SIMD2<Float>(Float.random(in: -1...1), Float.random(in: -1...1))
+            shakeVelocity = simd_normalize(direction + SIMD2<Float>(0.001, 0.001)) * 0.02
+            impact.impactOccurred()
+        } else {
+            scaleTarget = 1.0
         }
     }
 
-    func touchCancelled() {
+    func touchesCancelled(_ touches: Set<UITouch>, in view: IceARView) {
         isDragging = false
-        velocity = .zero
-        angularVelocity = 0
-        ice?.run(.scale(to: 1.0, duration: 0.2))
+        scaleTarget = 1.0
     }
 
-    // MARK: - 每帧更新（由 IceScene.update 调用）
+    // MARK: - 每帧更新
 
-    func update(deltaTime dt: TimeInterval) {
-        guard let ice = ice, dt > 0, dt < 1 else { return }
-        let dtF = CGFloat(dt)
+    func update(dt: TimeInterval) {
+        let dtf = Float(min(max(dt, 0), 1.0 / 20.0))
+        guard dtf > 0 else { return }
 
         if !isDragging {
             // 惯性滑行
-            if hypot(velocity.x, velocity.y) > 0.5 {
-                let damp = pow(linearDampingPerSecond, dtF)
-                velocity = CGPoint(x: velocity.x * damp, y: velocity.y * damp)
-                let newPos = CGPoint(x: ice.position.x + velocity.x * dtF,
-                                     y: ice.position.y + velocity.y * dtF)
-                ice.position = clampedToScene(newPos)
-
-                // 滑到边缘就停（不弹跳）
-                if ice.position != newPos { velocity = .zero }
+            let speed = simd_length(velocity)
+            if speed > stopSpeed {
+                velocity *= pow(dampingPerSecond, dtf)
+                var next = position + velocity * dtf
+                let clamped = clampToTable(next)
+                if clamped.x != next.x { velocity.x = 0 }
+                if clamped.y != next.y { velocity.y = 0 }
+                next = clamped
+                position = next
             } else {
                 velocity = .zero
             }
 
-            // 缓慢旋转衰减
-            if abs(angularVelocity) > 0.001 {
-                angularVelocity *= pow(angularDampingPerSecond, dtF)
-                ice.zRotation += angularVelocity * dtF
+            // 旋转衰减
+            if abs(yawRate) > 0.002 {
+                yawRate *= pow(0.12, dtf)
             } else {
-                angularVelocity = 0
+                yawRate = 0
             }
+        }
+
+        yaw += yawRate * dtf
+
+        // 缩放的弹簧（下压 / 回弹过冲）
+        let stiffness: Float = 220
+        let damping: Float = 18
+        let scaleAccel = (scaleTarget - scale) * stiffness - scaleVelocity * damping
+        scaleVelocity += scaleAccel * dtf
+        scale += scaleVelocity * dtf
+        if abs(scaleTarget - scale) < 0.0005 && abs(scaleVelocity) < 0.005 {
+            scale = scaleTarget
+            scaleVelocity = 0
+        }
+
+        // 位置抖动（点击的"视觉震动"）：弹簧回中
+        let shakeAccel = -shake * 900 - shakeVelocity * 26
+        shakeVelocity += shakeAccel * dtf
+        shake += shakeVelocity * dtf
+        if simd_length(shake) < 0.00002 && simd_length(shakeVelocity) < 0.0005 {
+            shake = .zero
+            shakeVelocity = .zero
+        }
+
+        applyTransform()
+    }
+
+    // MARK: - 应用到实体
+
+    private func applyTransform() {
+        guard let scene = scene, let cube = scene.cube, let mirror = scene.mirror else { return }
+
+        let x = position.x + shake.x
+        let z = position.y + shake.y
+
+        cube.position = [x, IceScene.cubeRestY, z]
+        cube.orientation = simd_quatf(angle: yaw, axis: [0, 1, 0])
+        cube.scale = [scale, scale, scale]
+
+        // 倒影：沿 Y 翻转，旋转取反
+        mirror.position = [x, -IceScene.cubeRestY, z]
+        mirror.orientation = simd_quatf(angle: -yaw, axis: [0, 1, 0])
+        mirror.scale = [scale, -scale, scale]
+    }
+
+    // MARK: - 坐标换算与边界
+
+    /// 手指在桌面上对应的世界坐标
+    private func worldPointOnTable(_ point: CGPoint, in view: IceARView) -> SIMD2<Float>? {
+        let hits = view.hitTest(point, query: .all, mask: .all)
+        guard let hit = hits.first(where: { $0.entity.name == IceScene.dragPlaneName }) else { return nil }
+        return SIMD2<Float>(hit.position.x, hit.position.z)
+    }
+
+    /// 手指是否按在冰上（冰体或其子节点）
+    private func isTouchingIce(_ point: CGPoint, in view: IceARView) -> Bool {
+        let hits = view.hitTest(point, query: .all, mask: .all)
+        return hits.contains { hit in
+            var entity: Entity? = hit.entity
+            while let current = entity {
+                if current.name == IceScene.cubeName { return true }
+                entity = current.parent
+            }
+            return false
         }
     }
 
-    // MARK: - 边界
-
-    private func clampedToScene(_ p: CGPoint) -> CGPoint {
-        guard let scene = ice?.scene else { return p }
-        let half = IceCubeNode.edge / 2
-        let inset: CGFloat = 8
-        let minX = half + inset
-        let maxX = scene.size.width - half - inset
-        let minY = half + inset
-        let maxY = scene.size.height - half - inset
-        return CGPoint(x: max(minX, min(maxX, p.x)),
-                       y: max(minY, min(maxY, p.y)))
+    private func clampToTable(_ p: SIMD2<Float>) -> SIMD2<Float> {
+        SIMD2<Float>(min(max(p.x, IceScene.boundsX.lowerBound), IceScene.boundsX.upperBound),
+                     min(max(p.y, IceScene.boundsZ.lowerBound), IceScene.boundsZ.upperBound))
     }
 }
