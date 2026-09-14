@@ -45,16 +45,8 @@ final class IceScene {
                     relativeTo: nil)
         root.addChild(camera)
 
-        // 环境光照（异步加载；iOS 17 SDK 只有 async 构造）——
-        // 给冰块的表面提供反射，是"真冰"和"塑料块"的分水岭
-        Task { @MainActor in
-            if let resource = try? await EnvironmentResource(named: "iceEnv", in: nil) {
-                view.environment.lighting.resource = resource
-                iceLog("env lighting loaded")
-            } else {
-                iceLog("env lighting FAILED to load")
-            }
-        }
+        // 环境光照：这个 SDK 的 EnvironmentResource 没有任何可用构造器，
+        // 所以先用三点布光顶上（见下），IBL 等确认 API 后再补。
 
         // 主光：左上前方，制造冰的冷白高光
         let key = DirectionalLight()
@@ -73,6 +65,15 @@ final class IceScene {
                   from: [1.0, 0.5, 0.4],
                   upVector: [0, 1, 0], relativeTo: nil)
         root.addChild(fill)
+
+        // 轮廓光：从后上方打过来，让冰的边缘亮起来（真冰最显眼的就是亮边）
+        let rim = DirectionalLight()
+        rim.light.intensity = 2600
+        rim.light.color = UIColor(red: 0.90, green: 0.95, blue: 1.0, alpha: 1.0)
+        rim.look(at: [0, IceScene.cubeRestY, 0],
+                 from: [0.35, 0.9, -1.2],
+                 upVector: [0, 1, 0], relativeTo: nil)
+        root.addChild(rim)
 
         // 拖拽平面：不可见（只有碰撞体、没有模型），
         // 只用来把手指位置精确换算成桌面上的世界坐标

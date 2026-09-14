@@ -47,6 +47,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Inspect available RealityKit API
+        run: |
+          SDK=$(xcrun --sdk iphonesimulator --show-sdk-path)
+          MOD="$SDK/System/Library/Frameworks/RealityKit.framework/Modules/RealityKit.swiftmodule"
+          ls -la "$MOD" || true
+          F=$(ls "$MOD"/*.swiftinterface 2>/dev/null | head -1)
+          echo "interface: $F"
+          echo "--- EnvironmentResource declarations ---"
+          grep -n "EnvironmentResource" "$F" | head -40 || true
+          echo "--- init lines near class EnvironmentResource ---"
+          awk '/class EnvironmentResource/,/^}/' "$F" | head -60 || true
+
       - name: Boot an iOS simulator
         run: |
           set -e
