@@ -63,7 +63,9 @@ final class IceInteraction {
         lastTouchTime = time
 
         // 点击反馈：轻微下压
-        ice.run(.scale(to: 0.96, duration: 0.09, delay: 0, usingSpringWithDamping: 0.6, initialSpringVelocity: 0))
+        let press = SKAction.scale(to: 0.96, duration: 0.09)
+        press.timingMode = .easeOut
+        ice.run(press)
         impactLight.impactOccurred()
 
         return true
@@ -97,10 +99,12 @@ final class IceInteraction {
         guard isDragging, let ice = ice else { return }
         isDragging = false
 
-        // 回弹
-        let restore = SKAction.scale(to: 1.0, duration: 0.35, delay: 0,
-                                     usingSpringWithDamping: 0.45, initialSpringVelocity: 0)
-        ice.run(restore)
+        // 回弹：先过冲到 1.02 再回到 1.0，模拟弹簧手感
+        let overshoot = SKAction.scale(to: 1.02, duration: 0.12)
+        overshoot.timingMode = .easeOut
+        let settle = SKAction.scale(to: 1.0, duration: 0.22)
+        settle.timingMode = .easeInEaseOut
+        ice.run(.sequence([overshoot, settle]))
 
         // 轻微视觉震动（两个小位移）
         let jiggle = SKAction.sequence([
