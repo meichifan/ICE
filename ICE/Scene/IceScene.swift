@@ -25,7 +25,7 @@ final class IceScene {
     static let cubeRestY: Float = IceCubeNode.size.y / 2
 
     private(set) var cube: ModelEntity!
-    private(set) var mirror: ModelEntity!
+    private(set) var mirror: Entity!
     private var camera = PerspectiveCamera()
 
     func build(in view: ARView) {
@@ -40,7 +40,7 @@ final class IceScene {
         camera.camera.near = 0.01
         camera.camera.far = 20
         camera.look(at: [0, IceScene.cubeRestY, 0],
-                    from: [0, 0.34, 0.44],
+                    from: [0, 0.34, 0.60],
                     upVector: [0, 1, 0],
                     relativeTo: nil)
         root.addChild(camera)
