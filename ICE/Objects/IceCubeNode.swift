@@ -78,59 +78,6 @@ enum IceTextures {
         return image.cgImage
     }
 
-    /// 环境光照贴图（等距圆柱投影）：一间极暗的房间里，左上有一块柔和的主光。
-    /// 它不会显示成背景，只用来给冰块提供反射和高光。
-    static func environmentImage(width: Int = 1024, height: Int = 512) -> CGImage? {
-        let size = CGSize(width: width, height: height)
-        let renderer = UIGraphicsImageRenderer(size: size)
-        let image = renderer.image { ctx in
-            let cg = ctx.cgContext
-            let rect = CGRect(origin: .zero, size: size)
-
-            // 极暗的房间：上略亮、下最暗
-            let colors = [
-                UIColor(red: 0.11, green: 0.12, blue: 0.14, alpha: 1).cgColor,
-                UIColor(red: 0.05, green: 0.05, blue: 0.06, alpha: 1).cgColor,
-                UIColor(red: 0.01, green: 0.01, blue: 0.015, alpha: 1).cgColor
-            ] as CFArray
-            if let grad = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                                     colors: colors, locations: [0, 0.55, 1]) {
-                cg.drawLinearGradient(grad,
-                                      start: CGPoint(x: 0, y: 0),
-                                      end: CGPoint(x: 0, y: rect.height),
-                                      options: [])
-            }
-
-            // 主光（柔光箱）：左上前方
-            drawSoftLight(cg, center: CGPoint(x: rect.width * 0.30, y: rect.height * 0.30),
-                          radius: rect.width * 0.20, intensity: 0.95)
-            // 副光：右侧稍弱，给冰的另一条棱一点亮
-            drawSoftLight(cg, center: CGPoint(x: rect.width * 0.72, y: rect.height * 0.40),
-                          radius: rect.width * 0.14, intensity: 0.42)
-            // 极弱的顶部环境光
-            drawSoftLight(cg, center: CGPoint(x: rect.width * 0.50, y: rect.height * 0.06),
-                          radius: rect.width * 0.30, intensity: 0.16)
-        }
-        return image.cgImage
-    }
-
-    private static func drawSoftLight(_ cg: CGContext,
-                                      center: CGPoint,
-                                      radius: CGFloat,
-                                      intensity: CGFloat) {
-        let colors = [
-            UIColor(red: 1.0, green: 0.99, blue: 0.97, alpha: intensity).cgColor,
-            UIColor(red: 0.9, green: 0.94, blue: 1.0, alpha: intensity * 0.35).cgColor,
-            UIColor(white: 1.0, alpha: 0).cgColor
-        ] as CFArray
-        guard let grad = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                                    colors: colors, locations: [0, 0.4, 1]) else { return }
-        cg.drawRadialGradient(grad,
-                              startCenter: center, startRadius: 0,
-                              endCenter: center, endRadius: radius,
-                              options: [])
-    }
-
     /// CGImage -> TextureResource
     static func texture(from image: CGImage) -> TextureResource? {
         try? TextureResource.generate(from: image, options: .init(semantic: .color))

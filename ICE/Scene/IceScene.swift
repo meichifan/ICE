@@ -35,9 +35,8 @@ final class IceScene {
         // 背景：接近黑，但不是纯黑
         view.environment.background = .color(UIColor(red: 0.055, green: 0.06, blue: 0.07, alpha: 1.0))
 
-        // 环境光照：极暗的房间 + 左上柔光箱
-        if let image = IceTextures.environmentImage(),
-           let resource = try? EnvironmentResource.generate(fromEquirectangular: image, withName: "iceEnv") {
+        // 环境光照：极暗的房间 + 左上柔光箱（Resources/iceEnv.skybox）
+        if let resource = try? EnvironmentResource.load(named: "iceEnv", in: nil) {
             view.environment.lighting.resource = resource
             view.environment.lighting.intensityExponent = 0.0
         }

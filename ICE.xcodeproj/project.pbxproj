@@ -12,6 +12,7 @@
 		A10000000000000000000003 /* IceScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000013 /* IceScene.swift */; };
 		A10000000000000000000004 /* IceCubeNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000014 /* IceCubeNode.swift */; };
 		A10000000000000000000005 /* IceInteraction.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000015 /* IceInteraction.swift */; };
+		A10000000000000000000008 /* iceEnv.skybox in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000019 /* iceEnv.skybox */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -22,6 +23,7 @@
 		A10000000000000000000014 /* IceCubeNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IceCubeNode.swift; sourceTree = "<group>"; };
 		A10000000000000000000015 /* IceInteraction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IceInteraction.swift; sourceTree = "<group>"; };
 		A10000000000000000000016 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A10000000000000000000019 /* iceEnv.skybox */ = {isa = PBXFileReference; lastKnownFileType = folder; path = iceEnv.skybox; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -108,6 +110,7 @@
 			isa = PBXGroup;
 			children = (
 				A10000000000000000000016 /* Info.plist */,
+				A10000000000000000000019 /* iceEnv.skybox */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -170,6 +173,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000000000000000000008 /* iceEnv.skybox in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
