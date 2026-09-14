@@ -45,9 +45,27 @@ final class IceScene {
                     relativeTo: nil)
         root.addChild(camera)
 
-        // 环境光照：这个 SDK 的 EnvironmentResource 没有任何可用构造器，
-        // 所以先用三点布光顶上（见下），IBL 等确认 API 后再补。
-
+        // 环境光照：给冰块的表面提供环境反射（"真冰"和"塑料块"的分水岭）。
+        // 逐条尝试可能的资源名，并把 bundle 内容打出来，确认 .skybox 到底有没有被编译。
+        if let items = try? FileManager.default.contentsOfDirectory(atPath: Bundle.main.bundleURL.path) {
+            iceLog("bundle items: \(items.sorted().joined(separator: ","))")
+            let skyboxPath = Bundle.main.bundleURL.appendingPathComponent("iceEnv.skybox").path
+            if let inner = try? FileManager.default.contentsOfDirectory(atPath: skyboxPath) {
+                iceLog("skybox items: \(inner.sorted().joined(separator: ","))")
+            } else {
+                iceLog("skybox folder not found at expected path")
+            }
+        }
+        for name in ["iceEnv", "iceEnv.skybox", "env", "env.png"] {
+            if let resource = try? EnvironmentResource.load(named: name, in: nil) {
+                view.environment.lighting.resource = resource
+                view.environment.lighting.intensityExponent = 0.0
+                iceLog("IBL OK with name '\(name)'")
+                break
+            } else {
+                iceLog("IBL load failed for name '\(name)'")
+            }
+        }
         // 主光：左上前方，制造冰的冷白高光
         let key = DirectionalLight()
         key.light.intensity = 4200
