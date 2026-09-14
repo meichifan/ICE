@@ -291,8 +291,9 @@ final class IceCubeNode {
     static func iceMaterial() -> PhysicallyBasedMaterial {
         var m = PhysicallyBasedMaterial()
 
-        // 冰本体几乎不漫反射：亮度全部来自环境反射和高光
-        m.baseColor.tint = UIColor(red: 0.12, green: 0.14, blue: 0.16, alpha: 1.0)
+        // 冰本体几乎不漫反射：亮度全部来自环境反射和高光。
+        // 底色往蓝灰方向偏，符合"冷"的色温（参考图方向）。
+        m.baseColor.tint = UIColor(red: 0.16, green: 0.19, blue: 0.24, alpha: 1.0)
         m.metallic = .init(floatLiteral: 0.0)
         m.specular = .init(floatLiteral: 1.0)
 

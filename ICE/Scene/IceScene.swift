@@ -30,8 +30,8 @@ final class IceScene {
     private var camera = PerspectiveCamera()
 
     func build(in view: ARView) {
-        // 背景：接近黑，但不是纯黑
-        view.environment.background = .color(UIColor(red: 0.055, green: 0.06, blue: 0.07, alpha: 1.0))
+        // 背景：深冷灰的室内空间，不是纯黑（参考图方向）
+        view.environment.background = .color(UIColor(red: 0.10, green: 0.115, blue: 0.14, alpha: 1.0))
 
         let root = AnchorEntity(world: .zero)
         view.scene.addAnchor(root)
@@ -55,10 +55,10 @@ final class IceScene {
         } else {
             iceLog("IBL load failed")
         }
-        // 主光：左上前方，制造冰的冷白高光
+        // 主光：左上前方，冷白带蓝（冷窗光）
         let key = DirectionalLight()
-        key.light.intensity = 4200
-        key.light.color = .white
+        key.light.intensity = 3600
+        key.light.color = UIColor(red: 0.80, green: 0.87, blue: 1.0, alpha: 1.0)
         key.look(at: [0, IceScene.cubeRestY, 0],
                  from: [-0.7, 1.2, 0.9],
                  upVector: [0, 1, 0], relativeTo: nil)
@@ -75,8 +75,8 @@ final class IceScene {
 
         // 轮廓光：从后上方打过来，让冰的边缘亮起来（真冰最显眼的就是亮边）
         let rim = DirectionalLight()
-        rim.light.intensity = 2600
-        rim.light.color = UIColor(red: 0.90, green: 0.95, blue: 1.0, alpha: 1.0)
+        rim.light.intensity = 2200
+        rim.light.color = UIColor(red: 0.82, green: 0.90, blue: 1.0, alpha: 1.0)
         rim.look(at: [0, IceScene.cubeRestY, 0],
                  from: [0.35, 0.9, -1.2],
                  upVector: [0, 1, 0], relativeTo: nil)
