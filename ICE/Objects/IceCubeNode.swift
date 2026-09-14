@@ -290,35 +290,17 @@ final class IceCubeNode {
         return entity
     }
 
-    /// 桌面上的倒影：分层，越往下越淡。容器整体沿 Y 翻转。
+    /// 桌面上的倒影：整块沿 Y 翻转、很淡（不做分层，避免看起来像 glitch）
     static func makeReflection() -> Entity {
-        let container = Entity()
-        container.name = IceScene.mirrorName
-        container.scale = [1, -1, 1]
+        var material = iceMaterial()
+        material.blending = .transparent(opacity: .init(floatLiteral: 0.13))
+        material.baseColor.tint = UIColor(white: 0.60, alpha: 1.0)
+        material.roughness = .init(floatLiteral: 0.45)
 
-        let layers = 6
-        let layerHeight = size.y / Float(layers)
-        let opacityTop: Float = 0.22
-
-        for k in 0..<layers {
-            // 容器本地 +y 对应世界方向的下方（因为容器被翻转）
-            let localY = -size.y / 2 + layerHeight * (Float(k) + 0.5)
-            let t = Float(k) / Float(layers - 1)
-            let opacity = opacityTop * pow(1 - t, 1.7) + 0.008
-
-            var material = iceMaterial()
-            material.blending = .transparent(opacity: .init(floatLiteral: opacity))
-            material.baseColor.tint = UIColor(white: 0.62, alpha: 1.0)
-
-            let slab = ModelEntity(
-                mesh: .generateBox(size: [size.x * 0.88, layerHeight, size.z * 0.88]),
-                materials: [material]
-            )
-            slab.position = [0, localY, 0]
-            container.addChild(slab)
-        }
-
-        return container
+        let entity = ModelEntity(mesh: makeMesh(), materials: [material])
+        entity.name = IceScene.mirrorName
+        entity.scale = [1, -1, 1]
+        return entity
     }
 
     // MARK: - 冰材质

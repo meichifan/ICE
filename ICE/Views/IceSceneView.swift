@@ -70,6 +70,7 @@ final class IceARView: ARView {
     private var scriptTimer: Timer?
     private var scriptPhaseStart = CACurrentMediaTime()
     private var scriptDragging = false
+    private var lastHeartbeat: TimeInterval = 0
 
     required init(frame: CGRect) {
         super.init(frame: frame)
@@ -157,11 +158,19 @@ final class IceARView: ARView {
     private func tickScriptedDrag() {
         guard let interaction else { return }
         let now = CACurrentMediaTime()
+
+        // 心跳：确认主线程还在跑、并记录冰块位置
+        if now - lastHeartbeat > 1.0 {
+            lastHeartbeat = now
+            let p = iceScene.cube?.position(relativeTo: nil) ?? .zero
+            iceLog("heartbeat t=\(Int((now - scriptPhaseStart).rounded())) drag=\(scriptDragging) cube=(\(String(format: "%.3f", p.x)), \(String(format: "%.3f", p.z)))")
+        }
+
         guard now >= scriptPhaseStart else { return }
         let phase = (now - scriptPhaseStart).truncatingRemainder(dividingBy: 4.0)
 
         let start = CGPoint(x: bounds.midX - 24, y: bounds.midY + 34)
-        let end = CGPoint(x: bounds.midX + 150, y: bounds.midY - 120)
+        let end = CGPoint(x: bounds.midX + 100, y: bounds.midY - 70)
 
         if phase < 1.0 {
             if !scriptDragging {

@@ -252,8 +252,9 @@ final class IceInteraction {
         // 纵深限制：太靠近相机 / 退到太远都会让冰块在画面里失控
         let z = min(max(p.y, zFar), zNear)
 
-        // 横向限制：按当前纵深处可见的左/右边界，内缩冰块半径
-        let half = IceCubeNode.size.x / 2 * 0.7
+        // 横向限制：按当前纵深处可见的左/右边界，内缩整个冰块半宽再多留一点，
+        // 保证冰块不会贴着屏幕边被切掉
+        let half = IceCubeNode.size.x / 2 + 0.012
         let lo = (leftEdge?.x(at: z) ?? -0.20) + half
         let hi = (rightEdge?.x(at: z) ?? 0.20) - half
         let x = lo < hi ? min(max(p.x, lo), hi) : (lo + hi) / 2
