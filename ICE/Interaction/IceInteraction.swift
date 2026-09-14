@@ -77,7 +77,7 @@ final class IceInteraction {
         isDragging = true
         velocity = .zero
         yawRate = 0
-        grabOffset = SIMD2<Float>(position.x - world.x, position.y - world.z)
+        grabOffset = SIMD2<Float>(position.x - world.x, position.y - world.y)
         lastTouchTime = touch.timestamp
 
         // 按下：轻微下压
@@ -95,7 +95,7 @@ final class IceInteraction {
         let dt = Float(max(touch.timestamp - lastTouchTime, 1.0 / 240.0))
         lastTouchTime = touch.timestamp
 
-        let target = SIMD2<Float>(world.x + grabOffset.x, world.z + grabOffset.y)
+        let target = SIMD2<Float>(world.x + grabOffset.x, world.y + grabOffset.y)
         var next = position + (target - position) * followFactor
         next = clampToTable(next)
 

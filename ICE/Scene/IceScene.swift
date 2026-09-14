@@ -37,7 +37,7 @@ final class IceScene {
 
         // 环境光照：极暗的房间 + 左上柔光箱
         if let image = IceTextures.environmentImage(),
-           let resource = try? EnvironmentResource(equirectangular: image, options: .init()) {
+           let resource = try? EnvironmentResource.generate(fromEquirectangular: image, withName: "iceEnv") {
             view.environment.lighting.resource = resource
             view.environment.lighting.intensityExponent = 0.0
         }

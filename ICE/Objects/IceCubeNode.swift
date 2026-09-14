@@ -180,11 +180,6 @@ final class IceCubeNode {
         m.clearcoat = .init(floatLiteral: 1.0)
         m.clearcoatRoughness = .init(floatLiteral: 0.04)
 
-        // 冰的体积感：光进入冰体再散出来
-        m.subsurfaceColor = .init(tint: UIColor(red: 0.74, green: 0.89, blue: 1.00, alpha: 1.0))
-        m.subsurfaceWeight = .init(floatLiteral: 0.65)
-        m.subsurfaceRadius = .init(floatLiteral: 0.012)
-
         // 清浊不均
         if let image = IceTextures.cloudImage(), let resource = IceTextures.texture(from: image) {
             let cloud = MaterialParameters.Texture(resource)
