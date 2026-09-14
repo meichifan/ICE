@@ -171,7 +171,6 @@ enum IceMesh {
 
         let faces: [(axis: Int, sign: Float)] = [(0, 1), (0, -1), (1, 1), (1, -1), (2, 1), (2, -1)]
         let n = segments
-        let edgeWidth: Float = 0.18      // 棱边附近的倒角范围（占面宽比例）
 
         for face in faces {
             let base = UInt32(positions.count)
@@ -191,19 +190,15 @@ enum IceMesh {
                     var normal = SIMD3<Float>(repeating: 0)
                     normal[face.axis] = face.sign
 
-                    // 1) 棱边倒角：越靠近棱，表面越往里收
+                    // 1) 棱边处位移必须收敛到 0，否则相邻面会被撕开（出现尖刺/裂缝）
                     let edgeDistance = min(1 - abs(fu), 1 - abs(fv))
-                    let chamferT = max(0, 1 - edgeDistance / edgeWidth)
-                    let chamfer = chamferT * chamferT * 0.0055
-                    p -= normal * chamfer
+                    let edgeFade = max(0, min(1, edgeDistance / 0.35))
+                    let fade = edgeFade * edgeFade * (3 - 2 * edgeFade)
 
-                    // 2) 大尺度起伏：整块冰的不规则
-                    let big = (noise(p * 8.0) - 0.5) * 0.0060
-                    // 3) 小尺度碎面：冻结表面的粗糙
-                    let small = (noise(p * 34.0 + SIMD3(11, 5, 7)) - 0.5) * 0.0022
-                    // 4) 崩边：棱附近随机缺口
-                    let chip = chamferT * (noise(p * 20 + SIMD3(3, 17, 9)) - 0.5) * 0.0075
-                    p += normal * (big + small + chip)
+                    // 2) 大尺度起伏 + 3) 小尺度碎面：面的中部有鼓有凹
+                    let big = (noise(p * 8.0) - 0.5) * 0.0075
+                    let small = (noise(p * 34.0 + SIMD3(11, 5, 7)) - 0.5) * 0.0028
+                    p += normal * ((big + small) * fade)
 
                     // 5) 法线扰动：让高光在表面碎开
                     let grad = SIMD3<Float>(
@@ -211,7 +206,7 @@ enum IceMesh {
                         noise(p * 42 + SIMD3(0, 1, 0)) - 0.5,
                         noise(p * 42 + SIMD3(0, 0, 1)) - 0.5
                     )
-                    normal = simd_normalize(normal + grad * 1.0)
+                    normal = simd_normalize(normal + grad * 0.60)
 
                     positions.append(p)
                     normals.append(normal)
@@ -270,36 +265,24 @@ final class IceCubeNode {
         return entity
     }
 
-    /// 桌面湿痕：接触处一圈很淡的亮环
+    /// 桌面湿痕：接触处一圈很淡的亮环。
+    /// 尺寸只比冰块略大一点点，读起来是"底板上的水膜边缘"。
     static func makeContactRing() -> ModelEntity {
         var material = PhysicallyBasedMaterial()
-        material.baseColor.tint = UIColor(red: 0.60, green: 0.68, blue: 0.80, alpha: 1.0)
-        material.roughness = .init(floatLiteral: 0.35)
+        material.baseColor.tint = UIColor(red: 0.55, green: 0.62, blue: 0.74, alpha: 1.0)
+        material.roughness = .init(floatLiteral: 0.40)
         material.metallic = .init(floatLiteral: 0.0)
         if let image = IceTextures.wetRingImage(), let resource = IceTextures.texture(from: image) {
             material.blending = .transparent(opacity: .init(texture: MaterialParameters.Texture(resource)))
         } else {
-            material.blending = .transparent(opacity: .init(floatLiteral: 0.18))
+            material.blending = .transparent(opacity: .init(floatLiteral: 0.12))
         }
 
         let entity = ModelEntity(
-            mesh: .generatePlane(width: size.x * 1.22, depth: size.z * 1.22),
+            mesh: .generatePlane(width: size.x * 1.05, depth: size.z * 1.05),
             materials: [material]
         )
         entity.name = IceScene.contactRingName
-        return entity
-    }
-
-    /// 桌面上的倒影：整块沿 Y 翻转、很淡（不做分层，避免看起来像 glitch）
-    static func makeReflection() -> Entity {
-        var material = iceMaterial()
-        material.blending = .transparent(opacity: .init(floatLiteral: 0.13))
-        material.baseColor.tint = UIColor(white: 0.60, alpha: 1.0)
-        material.roughness = .init(floatLiteral: 0.45)
-
-        let entity = ModelEntity(mesh: makeMesh(), materials: [material])
-        entity.name = IceScene.mirrorName
-        entity.scale = [1, -1, 1]
         return entity
     }
 

@@ -207,7 +207,7 @@ final class IceInteraction {
     // MARK: - 应用到实体
 
     private func applyTransform() {
-        guard let scene = scene, let cube = scene.cube, let mirror = scene.mirror else { return }
+        guard let scene = scene, let cube = scene.cube else { return }
 
         let x = position.x + shake.x
         let z = position.y + shake.y
@@ -216,13 +216,8 @@ final class IceInteraction {
         cube.orientation = simd_quatf(angle: yaw, axis: [0, 1, 0])
         cube.scale = [scale, scale, scale]
 
-        // 倒影：沿 Y 翻转，旋转取反
-        mirror.position = [x, -IceScene.cubeRestY, z]
-        mirror.orientation = simd_quatf(angle: -yaw, axis: [0, 1, 0])
-        mirror.scale = [scale, -scale, scale]
-
         // 桌面湿痕跟着冰块走
-        scene.contactRing.position = [x, 0.0006, z]
+        scene.contactRing.position = [x, 0.0004, z]
         scene.contactRing.orientation = simd_quatf(angle: yaw, axis: [0, 1, 0])
     }
 
