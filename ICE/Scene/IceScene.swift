@@ -32,7 +32,7 @@ final class IceScene: SKScene {
         guard let touch = touches.first else { return }
         let point = touch.location(in: self)
         let time = touch.timestamp
-        _ = interaction.touchBegan(at: point, time: time)
+        _ = interaction.touchBegan(at: point, time: time, in: self)
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {

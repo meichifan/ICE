@@ -44,11 +44,13 @@ final class IceInteraction {
 
     // MARK: - 触摸事件（由 IceScene 转发）
 
-    func touchBegan(at point: CGPoint, time: TimeInterval) -> Bool {
+    func touchBegan(at point: CGPoint, time: TimeInterval, in scene: SKScene) -> Bool {
         guard let ice = ice else { return false }
 
-        let touched = ice.bodySprite.contains(point)
-        guard touched else { return false }
+        // 触摸点是场景坐标，先转成冰块自己的坐标系再判断命中
+        let local = ice.convert(point, from: scene)
+        let hitArea = ice.bodySprite.frame.insetBy(dx: -14, dy: -14)
+        guard hitArea.contains(local) else { return false }
 
         // 停止所有进行中的动画
         ice.removeAllActions()

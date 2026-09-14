@@ -23,10 +23,20 @@ ICE/
 ├── App/ICEApp.swift            App 入口
 ├── Views/IceSceneView.swift    SwiftUI ↔ SpriteKit 桥
 ├── Scene/IceScene.swift        场景：背景 + 冰块 + 触摸转发
-├── Objects/IceCubeNode.swift   冰块（程序化绘制：气泡/水汽/高光/反射）
+├── Objects/IceCubeNode.swift   冰块（真实冰块微距照片纹理 + 湿润反射）
 ├── Interaction/IceInteraction.swift  点击/拖动/惯性/触觉反馈
-└── Resources/Info.plist
+└── Resources/
+    ├── ice_cube.png            冰块纹理（自带 alpha，背景已抠净）
+    ├── ice_reflection.png      底部湿润反射
+    └── Info.plist
 ```
+
+## 素材来源
+
+冰块纹理取自微距摄影作品 “Ice Cube”，作者 Helen Penjam，
+授权 CC BY 2.0（https://creativecommons.org/licenses/by/2.0/），
+来源 Wikimedia Commons。处理后仅保留冰块本体（黑底转为透明）并作冷色调压制。
+若后续要上架 App Store，需在应用内或商店信息中保留该署名。
 
 - Bundle ID: `com.ice.app`
 - 最低系统: iOS 16
