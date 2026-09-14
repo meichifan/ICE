@@ -243,20 +243,21 @@ final class IceCubeNode {
 
         let layers = 6
         let layerHeight = size.y / Float(layers)
-        let opacityTop: Float = 0.26
+        let opacityTop: Float = 0.17
 
         for k in 0..<layers {
             // 容器本地 +y 对应世界方向的下方（因为容器被翻转）
             let localY = -size.y / 2 + layerHeight * (Float(k) + 0.5)
             let t = Float(k) / Float(layers - 1)
-            let opacity = opacityTop * pow(1 - t, 1.6) + 0.015
+            let opacity = opacityTop * pow(1 - t, 1.9) + 0.008
 
             var material = iceMaterial()
             material.blending = .transparent(opacity: .init(floatLiteral: opacity))
-            material.baseColor.tint = UIColor(white: 0.7, alpha: 1.0)
+            material.baseColor.tint = UIColor(white: 0.62, alpha: 1.0)
 
+            // 比冰块本体略小一圈：读起来是"桌面上的湿痕"，而不是冰块的延续
             let slab = ModelEntity(
-                mesh: .generateBox(size: [size.x * 0.92, layerHeight, size.z * 0.92]),
+                mesh: .generateBox(size: [size.x * 0.86, layerHeight, size.z * 0.86]),
                 materials: [material]
             )
             slab.position = [0, localY, 0]

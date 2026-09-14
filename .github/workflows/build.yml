@@ -50,14 +50,14 @@ jobs:
       - name: Inspect available RealityKit API
         run: |
           SDK=$(xcrun --sdk iphonesimulator --show-sdk-path)
-          MOD="$SDK/System/Library/Frameworks/RealityKit.framework/Modules/RealityKit.swiftmodule"
-          ls -la "$MOD" || true
-          F=$(ls "$MOD"/*.swiftinterface 2>/dev/null | head -1)
-          echo "interface: $F"
-          echo "--- EnvironmentResource declarations ---"
-          grep -n "EnvironmentResource" "$F" | head -40 || true
-          echo "--- init lines near class EnvironmentResource ---"
-          awk '/class EnvironmentResource/,/^}/' "$F" | head -60 || true
+          for MODNAME in RealityFoundation RealityKit; do
+            MOD="$SDK/System/Library/Frameworks/$MODNAME.framework/Modules/$MODNAME.swiftmodule"
+            F=$(ls "$MOD"/*.swiftinterface 2>/dev/null | head -1)
+            echo "=== $MODNAME : $F ==="
+            grep -n "EnvironmentResource" "$F" | head -30 || true
+            echo "--- class body ---"
+            awk '/public class EnvironmentResource/,0' "$F" | head -45 || true
+          done
 
       - name: Boot an iOS simulator
         run: |
