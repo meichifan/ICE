@@ -73,13 +73,16 @@ jobs:
           set -e
           APP=build-sim/Build/Products/Debug-iphonesimulator/ICE.app
           xcrun simctl install "$SIM_UDID" "$APP"
-          xcrun simctl launch "$SIM_UDID" com.ice.app
-          sleep 8
-          xcrun simctl io "$SIM_UDID" screenshot shot-launch.png
-          # 拖动一下，看看惯性/旋转后的样子
+          # ICE_AUTODRAG=1 让 App 自己反复做一次拖动，方便截到"拖动中/惯性中"的画面
+          SIMCTL_CHILD_ICE_AUTODRAG=1 xcrun simctl launch "$SIM_UDID" com.ice.app
+          sleep 3
           xcrun simctl io "$SIM_UDID" screenshot shot-1.png
-          sleep 2
+          sleep 1
           xcrun simctl io "$SIM_UDID" screenshot shot-2.png
+          sleep 2
+          xcrun simctl io "$SIM_UDID" screenshot shot-3.png
+          sleep 2
+          xcrun simctl io "$SIM_UDID" screenshot shot-4.png
           ls -la *.png
 
       - name: Upload screenshots

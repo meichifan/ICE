@@ -62,12 +62,9 @@ final class IceInteraction {
 
     // MARK: - 触摸
 
-    func touchesBegan(_ touches: Set<UITouch>, in view: IceARView) {
-        guard let touch = touches.first else { return }
-        let point = touch.location(in: view)
-
+    func begin(at point: CGPoint, time: TimeInterval, in view: IceARView) {
         touchStartPoint = point
-        touchStartTime = touch.timestamp
+        touchStartTime = time
         movedDistance = 0
 
         // 必须按在冰上
@@ -78,22 +75,21 @@ final class IceInteraction {
         velocity = .zero
         yawRate = 0
         grabOffset = SIMD2<Float>(position.x - world.x, position.y - world.y)
-        lastTouchTime = touch.timestamp
+        lastTouchTime = time
 
         // 按下：轻微下压
         scaleTarget = 0.95
         impact.impactOccurred()
     }
 
-    func touchesMoved(_ touches: Set<UITouch>, in view: IceARView) {
-        guard isDragging, let touch = touches.first else { return }
-        let point = touch.location(in: view)
-        movedDistance += hypot(point.x - touchStartPoint.x, point.y - touchStartPoint.y)
+    func move(to point: CGPoint, time: TimeInterval, in view: IceARView) {
+        guard isDragging else { return }
+        movedDistance = hypot(point.x - touchStartPoint.x, point.y - touchStartPoint.y)
 
         guard let world = worldPointOnTable(point, in: view) else { return }
 
-        let dt = Float(max(touch.timestamp - lastTouchTime, 1.0 / 240.0))
-        lastTouchTime = touch.timestamp
+        let dt = Float(max(time - lastTouchTime, 1.0 / 240.0))
+        lastTouchTime = time
 
         let target = SIMD2<Float>(world.x + grabOffset.x, world.y + grabOffset.y)
         var next = position + (target - position) * followFactor
@@ -110,11 +106,11 @@ final class IceInteraction {
         yawRate = max(min(velocity.x * rotationPerSpeed, maxYawRate), -maxYawRate)
     }
 
-    func touchesEnded(_ touches: Set<UITouch>, in view: IceARView) {
-        guard isDragging, let touch = touches.first else { return }
+    func end(at point: CGPoint, time: TimeInterval, in view: IceARView) {
+        guard isDragging else { return }
         isDragging = false
 
-        let duration = touch.timestamp - touchStartTime
+        let duration = time - touchStartTime
         let isTap = movedDistance < tapMaxDistance && duration < tapMaxDuration
 
         let speed = simd_length(velocity)
@@ -134,7 +130,7 @@ final class IceInteraction {
         }
     }
 
-    func touchesCancelled(_ touches: Set<UITouch>, in view: IceARView) {
+    func cancel() {
         isDragging = false
         scaleTarget = 1.0
     }

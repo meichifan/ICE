@@ -73,9 +73,9 @@ final class IceScene {
                   upVector: [0, 1, 0], relativeTo: nil)
         root.addChild(fill)
 
-        // 拖拽平面：不可见，只用来把手指位置精确换算成桌面上的世界坐标
-        let plane = ModelEntity(mesh: .generatePlane(width: 8, depth: 8),
-                                materials: [invisibleMaterial()])
+        // 拖拽平面：不可见（只有碰撞体、没有模型），
+        // 只用来把手指位置精确换算成桌面上的世界坐标
+        let plane = Entity()
         plane.name = IceScene.dragPlaneName
         plane.components.set(CollisionComponent(shapes: [.generateBox(size: [8, 0.002, 8])]))
         root.addChild(plane)
@@ -91,12 +91,5 @@ final class IceScene {
         mirror.position = [0, -IceScene.cubeRestY, 0]
         root.addChild(mirror)
         self.mirror = mirror
-    }
-
-    private func invisibleMaterial() -> PhysicallyBasedMaterial {
-        var m = PhysicallyBasedMaterial()
-        m.baseColor.tint = .black
-        m.blending = .transparent(opacity: .init(floatLiteral: 0.0))
-        return m
     }
 }
