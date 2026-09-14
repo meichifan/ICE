@@ -100,6 +100,7 @@ final class IceARView: ARView {
     override func layoutSubviews() {
         super.layoutSubviews()
         iceLog("layoutSubviews bounds=\(bounds)")
+        interaction?.refreshVisibleTable(in: self)
     }
 
     // MARK: - 触摸转发
@@ -146,7 +147,8 @@ final class IceARView: ARView {
 
     private func startScriptedDragIfNeeded() {
         guard ProcessInfo.processInfo.environment["ICE_AUTODRAG"] == "1" else { return }
-        scriptPhaseStart = CACurrentMediaTime()
+        // 前 5 秒不动，方便截到"静止的冰块"
+        scriptPhaseStart = CACurrentMediaTime() + 5
         scriptTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             self?.tickScriptedDrag()
         }
@@ -155,6 +157,7 @@ final class IceARView: ARView {
     private func tickScriptedDrag() {
         guard let interaction else { return }
         let now = CACurrentMediaTime()
+        guard now >= scriptPhaseStart else { return }
         let phase = (now - scriptPhaseStart).truncatingRemainder(dividingBy: 4.0)
 
         let start = CGPoint(x: bounds.midX - 24, y: bounds.midY + 34)

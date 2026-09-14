@@ -53,6 +53,21 @@ final class IceInteraction {
     private let tapMaxDistance: CGFloat = 7
     private let tapMaxDuration: TimeInterval = 0.3
 
+    // 可见桌面范围（用屏幕四角射线算出来），保证冰块永远滑不出画面
+    private struct Edge {
+        let z0: Float; let x0: Float
+        let z1: Float; let x1: Float
+        func x(at z: Float) -> Float {
+            guard abs(z1 - z0) > 1e-6 else { return x0 }
+            let k = (z - z0) / (z1 - z0)
+            return x0 + (x1 - x0) * k
+        }
+    }
+    private var leftEdge: Edge?
+    private var rightEdge: Edge?
+    private var zNear: Float = 0.10
+    private var zFar: Float = -0.30
+
     init(view: IceARView, scene: IceScene) {
         self.view = view
         self.scene = scene
@@ -230,7 +245,46 @@ final class IceInteraction {
     }
 
     private func clampToTable(_ p: SIMD2<Float>) -> SIMD2<Float> {
-        SIMD2<Float>(min(max(p.x, IceScene.boundsX.lowerBound), IceScene.boundsX.upperBound),
-                     min(max(p.y, IceScene.boundsZ.lowerBound), IceScene.boundsZ.upperBound))
+        // 纵深限制：太靠近相机 / 退到太远都会让冰块在画面里失控
+        let z = min(max(p.y, zFar), zNear)
+
+        // 横向限制：按当前纵深处可见的左/右边界，内缩冰块半径
+        let half = IceCubeNode.size.x / 2 * 0.7
+        let lo = (leftEdge?.x(at: z) ?? -0.20) + half
+        let hi = (rightEdge?.x(at: z) ?? 0.20) - half
+        let x = lo < hi ? min(max(p.x, lo), hi) : (lo + hi) / 2
+
+        return SIMD2<Float>(x, z)
+    }
+
+    /// 用屏幕四角的射线在桌面上求交点，得到"可见桌面"的范围。
+    /// 这样冰块永远不会被拖出画面，边缘会自然停住。
+    func refreshVisibleTable(in view: IceARView) {
+        let b = view.bounds
+        guard b.width > 1, b.height > 1 else { return }
+
+        func tablePoint(_ p: CGPoint) -> SIMD2<Float>? {
+            let hits = view.hitTest(p, query: .all, mask: .all)
+            guard let hit = hits.first(where: { $0.entity.name == IceScene.dragPlaneName }) else { return nil }
+            return SIMD2<Float>(hit.position.x, hit.position.z)
+        }
+
+        guard let bottomLeft = tablePoint(CGPoint(x: 2, y: b.maxY - 2)),
+              let topLeft = tablePoint(CGPoint(x: 2, y: 2)),
+              let bottomRight = tablePoint(CGPoint(x: b.maxX - 2, y: b.maxY - 2)),
+              let topRight = tablePoint(CGPoint(x: b.maxX - 2, y: 2)) else {
+            iceLog("visible table: corner hit failed, keep defaults")
+            return
+        }
+
+        leftEdge = Edge(z0: bottomLeft.y, x0: bottomLeft.x, z1: topLeft.y, x1: topLeft.x)
+        rightEdge = Edge(z0: bottomRight.y, x0: bottomRight.x, z1: topRight.y, x1: topRight.x)
+
+        // 最近可见处再留一点余量；最远处不要退到地平线附近（否则冰块会变得极小）
+        zNear = max(bottomLeft.y, bottomRight.y) - 0.03
+        zFar = -0.30
+
+        iceLog("visible table z[\(zFar)...\(zNear)] "
+               + "leftX@home=\(leftEdge?.x(at: 0) ?? 0) rightX@home=\(rightEdge?.x(at: 0) ?? 0)")
     }
 }

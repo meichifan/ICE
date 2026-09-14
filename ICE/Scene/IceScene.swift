@@ -24,10 +24,6 @@ final class IceScene {
     /// 冰块静止时中心的高度（米）——贴地
     static let cubeRestY: Float = IceCubeNode.size.y / 2
 
-    /// 冰块能滑到的范围（桌面边界，软停止）
-    static let boundsX: ClosedRange<Float> = -0.33...0.33
-    static let boundsZ: ClosedRange<Float> = -0.30...0.12
-
     private(set) var cube: ModelEntity!
     private(set) var mirror: ModelEntity!
     private var camera = PerspectiveCamera()
@@ -36,24 +32,29 @@ final class IceScene {
         // 背景：接近黑，但不是纯黑
         view.environment.background = .color(UIColor(red: 0.055, green: 0.06, blue: 0.07, alpha: 1.0))
 
-        // 环境光照：极暗的房间 + 左上柔光箱（Resources/iceEnv.skybox）
-        if let resource = try? EnvironmentResource.load(named: "iceEnv", in: nil) {
-            view.environment.lighting.resource = resource
-            view.environment.lighting.intensityExponent = 0.0
-        }
-
         let root = AnchorEntity(world: .zero)
         view.scene.addAnchor(root)
 
-        // 相机：带一点俯角的产品镜头，长焦一点，透视不夸张
+        // 相机：带一点俯角的产品镜头（俯角大一点，纵深拖动的手感更线性）
         camera.camera.fieldOfViewInDegrees = 34
         camera.camera.near = 0.01
         camera.camera.far = 20
         camera.look(at: [0, IceScene.cubeRestY, 0],
-                    from: [0, 0.20, 0.43],
+                    from: [0, 0.34, 0.44],
                     upVector: [0, 1, 0],
                     relativeTo: nil)
         root.addChild(camera)
+
+        // 环境光照（异步加载；iOS 17 SDK 只有 async 构造）——
+        // 给冰块的表面提供反射，是"真冰"和"塑料块"的分水岭
+        Task { @MainActor in
+            if let resource = try? await EnvironmentResource(named: "iceEnv", in: nil) {
+                view.environment.lighting.resource = resource
+                iceLog("env lighting loaded")
+            } else {
+                iceLog("env lighting FAILED to load")
+            }
+        }
 
         // 主光：左上前方，制造冰的冷白高光
         let key = DirectionalLight()
