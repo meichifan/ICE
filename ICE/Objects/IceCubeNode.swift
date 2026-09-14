@@ -27,77 +27,117 @@ import UIKit
 
 enum IceTextures {
 
-    /// 冰体贴图：暗底 + 白色霜雾团块 + 亮裂纹。
-    /// 同一张图同时用作 baseColor / 透明度 / 粗糙度 三张贴图。
-    static func iceBodyImage(side: CGFloat = 512) -> CGImage? {
+    /// 透明度贴图：黑=透明、白=不透明。
+    /// 关键：靠边缘更透、中心更实（体积感的第一来源），再叠加内部霜斑。
+    static func opacityImage(side: CGFloat = 512) -> CGImage? {
         let size = CGSize(width: side, height: side)
         let renderer = UIGraphicsImageRenderer(size: size)
         let image = renderer.image { ctx in
             let cg = ctx.cgContext
-            let rect = CGRect(origin: .zero, size: size)
-
-            // 底部：干净的冰（暗、透）
-            cg.setFillColor(UIColor(white: 0.08, alpha: 1).cgColor)
-            cg.fill(rect)
-
-            // 中间一团大的霜核：真实冰块最常见的形态
-            drawBlob(cg, center: CGPoint(x: size.width * 0.5, y: size.height * 0.52),
-                     radius: side * 0.30, alpha: 0.55)
-            drawBlob(cg, center: CGPoint(x: size.width * 0.42, y: size.height * 0.45),
-                     radius: side * 0.18, alpha: 0.45)
-
-            // 大小不一的霜雾团块
-            for _ in 0..<80 {
-                let r = CGFloat.random(in: side * 0.03...side * 0.20)
-                let x = CGFloat.random(in: 0...side)
-                let y = CGFloat.random(in: 0...side)
-                drawBlob(cg, center: CGPoint(x: x, y: y), radius: r,
-                         alpha: CGFloat.random(in: 0.06...0.30))
+            // 径向梯度：边上较暗（更透），中心较亮（更实）
+            let center = CGPoint(x: side / 2, y: side / 2)
+            let colors = [
+                UIColor(white: 0.92, alpha: 1).cgColor,   // 中心：较实
+                UIColor(white: 0.72, alpha: 1).cgColor,   // 中环
+                UIColor(white: 0.32, alpha: 1).cgColor    // 边缘：较透
+            ] as CFArray
+            if let grad = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                                     colors: colors, locations: [0, 0.55, 1]) {
+                cg.drawRadialGradient(grad,
+                                      startCenter: center, startRadius: 0,
+                                      endCenter: center, endRadius: side * 0.72,
+                                      options: [.drawsAfterEndLocation])
             }
-
-            // 裂纹：细而亮的线
-            cg.setLineCap(.round)
-            for _ in 0..<26 {
-                let x0 = CGFloat.random(in: 0...side)
-                let y0 = CGFloat.random(in: 0...side)
-                let len = CGFloat.random(in: side * 0.05...side * 0.26)
-                let angle = CGFloat.random(in: 0...(2 * .pi))
-                let path = UIBezierPath()
-                path.move(to: CGPoint(x: x0, y: y0))
-                path.addLine(to: CGPoint(x: x0 + cos(angle) * len,
-                                         y: y0 + sin(angle) * len))
-                path.lineWidth = CGFloat.random(in: 0.6...1.8)
-                UIColor(white: 1.0, alpha: CGFloat.random(in: 0.25...0.60)).setStroke()
-                path.stroke()
-            }
-
-            // 气泡：零星亮点
-            for _ in 0..<40 {
-                let r = CGFloat.random(in: side * 0.004...side * 0.014)
-                let x = CGFloat.random(in: 0...side)
-                let y = CGFloat.random(in: 0...side)
-                cg.setFillColor(UIColor(white: 1.0, alpha: CGFloat.random(in: 0.3...0.8)).cgColor)
-                cg.fillEllipse(in: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2))
+            // 内部霜斑：中性的浊区
+            for _ in 0..<45 {
+                drawBlob(cg,
+                         center: CGPoint(x: .random(in: side*0.2...side*0.8),
+                                         y: .random(in: side*0.2...side*0.8)),
+                         radius: .random(in: side*0.05...side*0.22),
+                         alpha: .random(in: 0.10...0.28))
             }
         }
         return image.cgImage
     }
 
-    private static func drawBlob(_ cg: CGContext,
-                                 center: CGPoint,
-                                 radius: CGFloat,
-                                 alpha: CGFloat) {
+    /// 粗糙度贴图：黑=光滑（锐利镜面高光）、白=粗糙（霜面）。
+    /// 冰表面应是湿润光滑的，只在霜斑和裂隙处略糙，所以整体偏暗。
+    static func roughnessImage(side: CGFloat = 512) -> CGImage? {
+        let size = CGSize(width: side, height: side)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let image = renderer.image { ctx in
+            let cg = ctx.cgContext
+            cg.setFillColor(UIColor(white: 0.10, alpha: 1).cgColor)  // 整体湿润光滑
+            cg.fill(CGRect(origin: .zero, size: size))
+            // 少量霜斑让高光有点碎
+            for _ in 0..<30 {
+                drawBlob(cg,
+                         center: CGPoint(x: .random(in: 0...side),
+                                         y: .random(in: 0...side)),
+                         radius: .random(in: side*0.04...side*0.16),
+                         alpha: .random(in: 0.08...0.22))
+            }
+            // 裂隙：细线略糙
+            cg.setLineCap(.round)
+            for _ in 0..<16 {
+                let x0 = CGFloat.random(in: 0...side), y0 = CGFloat.random(in: 0...side)
+                let len = CGFloat.random(in: side*0.05...side*0.20)
+                let a = CGFloat.random(in: 0...(2 * .pi))
+                let pth = UIBezierPath()
+                pth.move(to: CGPoint(x: x0, y: y0))
+                pth.addLine(to: CGPoint(x: x0 + cos(a)*len, y: y0 + sin(a)*len))
+                pth.lineWidth = CGFloat.random(in: 0.5...1.4)
+                UIColor(white: 1.0, alpha: CGFloat.random(in: 0.10...0.25)).setStroke()
+                pth.stroke()
+            }
+        }
+        return image.cgImage
+    }
+
+    /// 颜色贴图：冰的淡蓝冷色，中心霜区偏白。
+    static func colorImage(side: CGFloat = 512) -> CGImage? {
+        let size = CGSize(width: side, height: side)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let image = renderer.image { ctx in
+            let cg = ctx.cgContext
+            // 基底：淡蓝灰（冰的颜色）
+            cg.setFillColor(UIColor(red: 0.72, green: 0.82, blue: 0.94, alpha: 1).cgColor)
+            cg.fill(CGRect(origin: .zero, size: size))
+            // 中心霜区偏白
+            drawTintedBlob(cg, center: CGPoint(x: side*0.5, y: side*0.5),
+                           radius: side*0.34,
+                           color: UIColor(red: 0.95, green: 0.97, blue: 1.0, alpha: 1))
+            drawTintedBlob(cg, center: CGPoint(x: side*0.42, y: side*0.44),
+                           radius: side*0.16,
+                           color: UIColor(red: 0.90, green: 0.94, blue: 1.0, alpha: 1))
+        }
+        return image.cgImage
+    }
+
+    private static func drawTintedBlob(_ cg: CGContext, center: CGPoint,
+                                       radius: CGFloat, color: UIColor) {
+        let colors = [
+            color.cgColor,
+            color.withAlphaComponent(0).cgColor
+        ] as CFArray
+        guard let grad = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                                    colors: colors, locations: [0, 1]) else { return }
+        cg.drawRadialGradient(grad, startCenter: center, startRadius: 0,
+                              endCenter: center, endRadius: radius, options: [])
+    }
+
+    /// 灰度软斑（用于不透明度的内部霜区与粗糙度的霜面）
+    private static func drawBlob(_ cg: CGContext, center: CGPoint,
+                                 radius: CGFloat, alpha: CGFloat) {
         let colors = [
             UIColor(white: 1.0, alpha: alpha).cgColor,
-            UIColor(white: 1.0, alpha: alpha * 0.45).cgColor,
+            UIColor(white: 1.0, alpha: alpha * 0.5).cgColor,
             UIColor(white: 1.0, alpha: 0).cgColor
         ] as CFArray
         guard let grad = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
                                     colors: colors, locations: [0, 0.5, 1]) else { return }
-        cg.drawRadialGradient(grad,
-                              startCenter: center, startRadius: 0,
-                              endCenter: center, endRadius: radius,
-                              options: [])
+        cg.drawRadialGradient(grad, startCenter: center, startRadius: 0,
+                              endCenter: center, endRadius: radius, options: [])
     }
 
     /// 桌面湿痕：一圈很淡的亮环（冰放在黑玻璃桌面上，接触处的水膜反光）
@@ -160,7 +200,8 @@ enum IceMesh {
         return result
     }
 
-    /// 不规则冰块：立方体表面做顶点扰动 + 棱边倒角 + 崩边 + 法线扰动。
+    /// 不规则冰块：先对"体积"做一次整体顶点扰动（让轮廓不再是标准方盒，
+    /// 相邻面在共享棱上位置一致、不撕裂），再叠加面的法线扰动让高光碎开。
     /// 失败返回 nil（调用方退回标准方盒，保证一定能跑）。
     static func makeIrregularBox(size: SIMD3<Float>, segments: Int = 16) -> MeshResource? {
         let half = size / 2
@@ -171,60 +212,78 @@ enum IceMesh {
 
         let faces: [(axis: Int, sign: Float)] = [(0, 1), (0, -1), (1, 1), (1, -1), (2, 1), (2, -1)]
         let n = segments
+        let faceAxis = { (face: (Int, Float), u: Float, v: Float) -> SIMD3<Float> in
+            var p = SIMD3<Float>(repeating: 0)
+            p[face.0] = half[face.0] * face.1
+            p[(face.0 + 1) % 3] = half[(face.0 + 1) % 3] * u
+            p[(face.0 + 2) % 3] = half[(face.0 + 2) % 3] * v
+            return p
+        }
 
+        // 体积扰动：对整个立方体表面做位移，得到不规则的轮廓。
+        // 位移只在面内、不沿法线方向，这样每个面的基准点保持在同一平面上，
+        // 位移幅度均匀，不会出现棱边开缝。
+        func displace(_ p: SIMD3<Float>) -> SIMD3<Float> {
+            // 大尺度起伏 + 小尺度碎面，都是"贴着表面"的起伏
+            let big = (noise(p * 8.0) - 0.5) * 0.009
+            let small = (noise(p * 34.0 + SIMD3(11, 5, 7)) - 0.5) * 0.0032
+            return p + big + small
+        }
+
+        // 预计算：为每个面内的每个顶点，先算好"体积扰动"后的基础位置。
+        // 由于噪声是坐标的确定函数，相邻面在共享棱上的点会得到一致的位移，
+        // 因此不会撕裂。棱边就是这个扰动后的不平滑顶点序列。
+        var faceBasePositions: [[SIMD3<Float>]] = []
         for face in faces {
-            let base = UInt32(positions.count)
-            let axisA = (face.axis + 1) % 3
-            let axisB = (face.axis + 2) % 3
-
+            var grid: [SIMD3<Float>] = []
             for i in 0...n {
                 for j in 0...n {
                     let fu = Float(i) / Float(n) * 2 - 1
                     let fv = Float(j) / Float(n) * 2 - 1
-
-                    var p = SIMD3<Float>(repeating: 0)
-                    p[face.axis] = half[face.axis] * face.sign
-                    p[axisA] = half[axisA] * fu
-                    p[axisB] = half[axisB] * fv
-
-                    var normal = SIMD3<Float>(repeating: 0)
-                    normal[face.axis] = face.sign
-
-                    // 1) 棱边处位移必须收敛到 0，否则相邻面会被撕开（出现尖刺/裂缝）
-                    let edgeDistance = min(1 - abs(fu), 1 - abs(fv))
-                    let edgeFade = max(0, min(1, edgeDistance / 0.35))
-                    let fade = edgeFade * edgeFade * (3 - 2 * edgeFade)
-
-                    // 2) 大尺度起伏 + 3) 小尺度碎面：面的中部有鼓有凹
-                    let big = (noise(p * 8.0) - 0.5) * 0.0075
-                    let small = (noise(p * 34.0 + SIMD3(11, 5, 7)) - 0.5) * 0.0028
-                    p += normal * ((big + small) * fade)
-
-                    // 5) 法线扰动：让高光在表面碎开
-                    let grad = SIMD3<Float>(
-                        noise(p * 42 + SIMD3(1, 0, 0)) - 0.5,
-                        noise(p * 42 + SIMD3(0, 1, 0)) - 0.5,
-                        noise(p * 42 + SIMD3(0, 0, 1)) - 0.5
-                    )
-                    normal = simd_normalize(normal + grad * 0.60)
-
-                    positions.append(p)
-                    normals.append(normal)
-                    uvs.append(SIMD2<Float>(Float(i) / Float(n), Float(j) / Float(n)))
+                    let p = faceAxis(face, fu, fv)
+                    grid.append(displace(p))
                 }
             }
+            faceBasePositions.append(grid)
+        }
 
-            let flip = face.sign < 0
+        // 构建顶点 + 法线 + UV + 索引
+        for (fi, face) in faces.enumerated() {
+            let base = UInt32(positions.count)
+            let grid = faceBasePositions[fi]
+
+            for idx in 0..<grid.count {
+                let p = grid[idx]
+                var normal = SIMD3<Float>(repeating: 0)
+                normal[face.0] = face.1
+
+                // 法线扰动：让高光在表面碎开，而不是一块平板
+                let grad = SIMD3<Float>(
+                    noise(p * 42 + SIMD3(1, 0, 0)) - 0.5,
+                    noise(p * 42 + SIMD3(0, 1, 0)) - 0.5,
+                    noise(p * 42 + SIMD3(0, 0, 1)) - 0.5
+                )
+                normal = simd_normalize(normal + grad * 0.55)
+
+                positions.append(p)
+                normals.append(normal)
+                let i = idx / (n + 1), j = idx % (n + 1)
+                uvs.append(SIMD2<Float>(Float(i) / Float(n), Float(j) / Float(n)))
+            }
+
+            // 绕序：之前 verts 叉积朝内（normal·sign<0），这里反转索引使叉积朝外。
+            // 叉积方向应与面法线一致（朝外 = 面法线 × sign 方向）。
+            let inward = face.1 < 0
             for i in 0..<n {
                 for j in 0..<n {
                     let i0 = base + UInt32(i * (n + 1) + j)
                     let i1 = i0 + 1
                     let i2 = i0 + UInt32(n + 1)
                     let i3 = i2 + 1
-                    if flip {
-                        indices += [i0, i3, i1, i0, i2, i3]
-                    } else {
+                    if inward {
                         indices += [i0, i1, i3, i0, i3, i2]
+                    } else {
+                        indices += [i0, i3, i1, i0, i2, i3]
                     }
                 }
             }
@@ -246,9 +305,18 @@ final class IceCubeNode {
 
     static let size: SIMD3<Float> = [0.09, 0.09, 0.09]
 
-    /// 共享的冰体贴图（三用：颜色 / 透明度 / 粗糙度）
-    private static let bodyTexture: TextureResource? = {
-        guard let image = IceTextures.iceBodyImage() else { return nil }
+    /// 三张职责各异的贴图（颜色 / 透明度 / 粗糙度）。
+    /// 都用固定随机种子生成，保证每次启动一致，也便于在 CI 里比对画面。
+    private static let colorTexture: TextureResource? = {
+        guard let image = IceTextures.colorImage() else { return nil }
+        return IceTextures.texture(from: image)
+    }()
+    private static let opacityTexture: TextureResource? = {
+        guard let image = IceTextures.opacityImage() else { return nil }
+        return IceTextures.texture(from: image)
+    }()
+    private static let roughnessTexture: TextureResource? = {
+        guard let image = IceTextures.roughnessImage() else { return nil }
         return IceTextures.texture(from: image)
     }()
 
@@ -308,13 +376,12 @@ final class IceCubeNode {
             return m
         }
 
-        if let body = bodyTexture {
-            let map = MaterialParameters.Texture(body)
-            m.baseColor = .init(texture: map)                        // 暗处透、亮处霜
-            m.blending = .transparent(opacity: .init(texture: map))   // 暗处透、亮处实
-            m.roughness = .init(texture: map)                         // 暗处光滑、亮处霜面
+        if let colorTex = colorTexture, let opacityTex = opacityTexture, let roughTex = roughnessTexture {
+            m.baseColor = .init(texture: MaterialParameters.Texture(colorTex))          // 淡蓝冷色 + 中心偏白
+            m.blending = .transparent(opacity: .init(texture: MaterialParameters.Texture(opacityTex)))  // 边缘透、中心实
+            m.roughness = .init(texture: MaterialParameters.Texture(roughTex))           // 湿润光滑、霜区略糙
         } else {
-            m.blending = .transparent(opacity: .init(floatLiteral: 0.35))
+            m.blending = .transparent(opacity: .init(floatLiteral: 0.55))
             m.roughness = .init(floatLiteral: 0.10)
         }
 
