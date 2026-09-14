@@ -220,6 +220,10 @@ final class IceInteraction {
         mirror.position = [x, -IceScene.cubeRestY, z]
         mirror.orientation = simd_quatf(angle: -yaw, axis: [0, 1, 0])
         mirror.scale = [scale, -scale, scale]
+
+        // 桌面湿痕跟着冰块走
+        scene.contactRing.position = [x, 0.0006, z]
+        scene.contactRing.orientation = simd_quatf(angle: yaw, axis: [0, 1, 0])
     }
 
     // MARK: - 坐标换算与边界

@@ -19,6 +19,7 @@ final class IceScene {
 
     static let cubeName = "iceCube"
     static let mirrorName = "iceMirror"
+    static let contactRingName = "iceContactRing"
     static let dragPlaneName = "dragPlane"
 
     /// 冰块静止时中心的高度（米）——贴地
@@ -26,6 +27,7 @@ final class IceScene {
 
     private(set) var cube: ModelEntity!
     private(set) var mirror: Entity!
+    private(set) var contactRing: ModelEntity!
     private var camera = PerspectiveCamera()
 
     func build(in view: ARView) {
@@ -46,25 +48,13 @@ final class IceScene {
         root.addChild(camera)
 
         // 环境光照：给冰块的表面提供环境反射（"真冰"和"塑料块"的分水岭）。
-        // 逐条尝试可能的资源名，并把 bundle 内容打出来，确认 .skybox 到底有没有被编译。
-        if let items = try? FileManager.default.contentsOfDirectory(atPath: Bundle.main.bundleURL.path) {
-            iceLog("bundle items: \(items.sorted().joined(separator: ","))")
-            let skyboxPath = Bundle.main.bundleURL.appendingPathComponent("iceEnv.skybox").path
-            if let inner = try? FileManager.default.contentsOfDirectory(atPath: skyboxPath) {
-                iceLog("skybox items: \(inner.sorted().joined(separator: ","))")
-            } else {
-                iceLog("skybox folder not found at expected path")
-            }
-        }
-        for name in ["iceEnv", "iceEnv.skybox", "env", "env.png"] {
-            if let resource = try? EnvironmentResource.load(named: name, in: nil) {
-                view.environment.lighting.resource = resource
-                view.environment.lighting.intensityExponent = 0.0
-                iceLog("IBL OK with name '\(name)'")
-                break
-            } else {
-                iceLog("IBL load failed for name '\(name)'")
-            }
+        // 注意：打包进来的 .skybox 文件夹要用带扩展名的名字加载。
+        if let resource = try? EnvironmentResource.load(named: "iceEnv.skybox", in: nil) {
+            view.environment.lighting.resource = resource
+            view.environment.lighting.intensityExponent = 0.0
+            iceLog("IBL loaded")
+        } else {
+            iceLog("IBL load failed")
         }
         // 主光：左上前方，制造冰的冷白高光
         let key = DirectionalLight()
@@ -105,6 +95,12 @@ final class IceScene {
         cube.position = [0, IceScene.cubeRestY, 0]
         root.addChild(cube)
         self.cube = cube
+
+        // 桌面湿痕（接触环）：解决"悬浮感"
+        let ring = IceCubeNode.makeContactRing()
+        ring.position = [0, 0.0006, 0]
+        root.addChild(ring)
+        self.contactRing = ring
 
         // 桌上那层很淡的倒影
         let mirror = IceCubeNode.makeReflection()
