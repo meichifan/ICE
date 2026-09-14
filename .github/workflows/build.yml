@@ -79,10 +79,11 @@ jobs:
             EXTRA="$2"
             xcrun simctl terminate "$SIM_UDID" com.ice.app 2>/dev/null || true
             sleep 1
-            # 后台挂着 console 抓 App 的 stderr 日志
-            ( env $EXTRA SIMCTL_CHILD_ICE_AUTODRAG=1 SIMCTL_CHILD_ICE_DIAG=1 \
-                timeout 24 xcrun simctl launch --console "$SIM_UDID" com.ice.app \
-                > "console-$NAME.log" 2>&1 ) || true &
+            # 后台挂着 console 抓 App 的 stderr 日志（macOS 没有 timeout 命令，用 kill 控制）
+            env $EXTRA SIMCTL_CHILD_ICE_AUTODRAG=1 SIMCTL_CHILD_ICE_DIAG=1 \
+              xcrun simctl launch --console "$SIM_UDID" com.ice.app \
+              > "console-$NAME.log" 2>&1 &
+            CONSOLE_PID=$!
             sleep 5
             xcrun simctl io "$SIM_UDID" screenshot "$NAME-1.png" || true
             sleep 1
@@ -91,7 +92,8 @@ jobs:
             xcrun simctl io "$SIM_UDID" screenshot "$NAME-3.png" || true
             sleep 2
             xcrun simctl io "$SIM_UDID" screenshot "$NAME-4.png" || true
-            sleep 16
+            kill "$CONSOLE_PID" 2>/dev/null || true
+            sleep 1
           }
 
           run_mode normal ""
